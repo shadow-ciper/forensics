@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Case ID** | IR-2024-001-DNS-RSHELL |
-| **Analyst** | [Your Name] |
+| **Analyst** | [shadowciper] |
 | **Date of Analysis** | July 5, 2024 |
 | **Evidence File** | dns-remoteshell.pcap |
 | **Evidence Hash (SHA-256)** | 8c89c0d2d5b91695a03d05a451897f583a99d2379afac0822af0d8f390163d95 |
