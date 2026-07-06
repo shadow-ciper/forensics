@@ -1,0 +1,92 @@
+# ============================================================
+# IR PLAYBOOK — CUSTOM SNORT RULES
+# Target: dns-remoteshell.pcap — Remote Shell Detection
+# Created: 2024-07-05
+# Based on forensic analysis of dns-remoteshell.pcap
+#
+# KEY INSIGHT: Attacker (192.168.1.3) is INTERNAL — on same
+# LAN as victim (192.168.1.2). Rules use specific IPs.
+# Rules avoid flow:established where possible to work with
+# pcaps that have retransmissions/out-of-order packets.
+# ============================================================
+
+# ----------------------------------------------------------
+# RULE 1: Covert Remote Shell on DNS Port (TCP 53) — Banner
+# Detects Windows XP banner on TCP port 53 — DNS port misuse
+# ----------------------------------------------------------
+alert tcp 192.168.1.2 53 -> 192.168.1.3 any (msg:"[IR PLAYBOOK] Covert remote shell on TCP port 53 - Windows XP banner from DNS port"; content:"Microsoft Windows XP"; nocase; classtype:trojan-activity; sid:1000001; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 2: Telnet Remote Shell — Banner Disclosure
+# Detects Telnet session revealing Windows XP banner
+# ----------------------------------------------------------
+alert tcp 192.168.1.2 23 -> 192.168.1.3 any (msg:"[IR PLAYBOOK] Telnet session revealing Windows XP banner - remote shell access"; content:"Microsoft Windows XP"; nocase; classtype:trojan-activity; sid:1000002; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 3: Telnet Remote Shell — Command Execution (dir)
+# Detects `dir` command sent via Telnet from attacker
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 23 (msg:"[IR PLAYBOOK] Remote dir command executed via Telnet - filesystem enumeration"; content:"dir"; depth:4; classtype:trojan-activity; sid:1000003; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 4: Remote Shell on HTTP Port (TCP 80) — Banner
+# Detects non-HTTP Windows XP banner on port 80
+# ----------------------------------------------------------
+alert tcp 192.168.1.2 80 -> 192.168.1.3 any (msg:"[IR PLAYBOOK] Non-HTTP remote shell on port 80 - Windows XP banner detected"; content:"Microsoft Windows XP"; nocase; classtype:trojan-activity; sid:1000004; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 5: FTP Port Scan — Repeated SYN to Port 21
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 21 (msg:"[IR PLAYBOOK] FTP port scan - connection probing on port 21"; flags:S; detection_filter:track by_src, count 5, seconds 15; classtype:attempted-recon; sid:1000005; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 6: Windows XP Banner Disclosure Over Any TCP
+# Generic — detects version string from victim to attacker
+# ----------------------------------------------------------
+alert tcp 192.168.1.2 any -> 192.168.1.3 any (msg:"[IR PLAYBOOK] Windows XP version banner disclosed over TCP - potential remote shell"; content:"Microsoft Windows XP [Version 5.1.2600]"; classtype:trojan-activity; sid:1000006; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 7: Failed Linux Command (ls) on Windows Shell
+# Detects `ls` sent to Windows — attacker profiling
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 23 (msg:"[IR PLAYBOOK] Linux command ls sent to Windows via Telnet - attacker profiling and shell confirmation"; content:"ls"; depth:3; classtype:trojan-activity; sid:1000007; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 8: Unauthorized Internal TCP Connection to Port 53
+# DNS should be UDP. TCP 53 = covert channel
+# ----------------------------------------------------------
+alert tcp 192.168.1.0/24 any -> 192.168.1.0/24 53 (msg:"[IR PLAYBOOK] Suspicious TCP connection to DNS port 53 - possible covert channel"; flags:S; classtype:trojan-activity; sid:1000008; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 9: Shell Command dir on Port 80 (Non-HTTP)
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 80 (msg:"[IR PLAYBOOK] Shell command dir sent to HTTP port 80 - non-HTTP backdoor"; content:"dir"; depth:4; content:!"GET"; content:!"POST"; classtype:trojan-activity; sid:1000009; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 10: SYN Scan Against FTP Port 21
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 21 (msg:"[IR PLAYBOOK] SYN scan detected against FTP port 21 - enumeration"; flags:S; detection_filter:track by_src, count 6, seconds 10; classtype:attempted-recon; sid:1000010; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 11: dir Command on Covert Port 53
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 53 (msg:"[IR PLAYBOOK] Shell command dir on covert DNS port 53 - backdoor confirmed"; content:"dir"; depth:4; classtype:trojan-activity; sid:1000011; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 12: exit Command on DNS Port 53
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 53 (msg:"[IR PLAYBOOK] Shell exit command on DNS port 53 - covert session termination"; content:"exit"; depth:5; classtype:trojan-activity; sid:1000012; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 13: exit Command on HTTP Port 80
+# ----------------------------------------------------------
+alert tcp 192.168.1.3 any -> 192.168.1.2 80 (msg:"[IR PLAYBOOK] Shell exit command on HTTP port 80 - backdoor session termination"; content:"exit"; depth:5; content:!"GET"; content:!"POST"; classtype:trojan-activity; sid:1000013; rev:1;)
+
+# ----------------------------------------------------------
+# RULE 14: Directory Listing Output on Non-HTTP Port
+# Detects "Volume in drive" output on port 53 or 80
+# confirms shell command execution on covert channels
+# ----------------------------------------------------------
+alert tcp 192.168.1.2 53 -> 192.168.1.3 any (msg:"[IR PLAYBOOK] Dir command output on DNS port 53 - covert shell confirmed"; content:"Volume in drive"; nocase; classtype:trojan-activity; sid:1000014; rev:1;)
+alert tcp 192.168.1.2 80 -> 192.168.1.3 any (msg:"[IR PLAYBOOK] Dir command output on HTTP port 80 - backdoor shell confirmed"; content:"Volume in drive"; nocase; classtype:trojan-activity; sid:1000015; rev:1;)
+alert tcp 192.168.1.2 23 -> 192.168.1.3 any (msg:"[IR PLAYBOOK] Dir command output on Telnet port 23 - remote shell confirmed"; content:"Volume in drive"; nocase; classtype:trojan-activity; sid:1000016; rev:1;)

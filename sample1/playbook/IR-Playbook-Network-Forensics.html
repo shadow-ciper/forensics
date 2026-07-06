@@ -1,0 +1,2068 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+body {
+    font-family: 'Helvetica', 'Arial', sans-serif;
+    font-size: 10pt;
+    line-height: 1.5;
+    color: #1a1a1a;
+    margin: 30px;
+}
+h1 {
+    color: #1a3a5c;
+    font-size: 20pt;
+    border-bottom: 3px solid #1a3a5c;
+    padding-bottom: 8px;
+    margin-top: 30px;
+}
+h2 {
+    color: #2c5282;
+    font-size: 15pt;
+    border-bottom: 1px solid #a0aec0;
+    padding-bottom: 4px;
+    margin-top: 25px;
+}
+h3 {
+    color: #2d3748;
+    font-size: 12pt;
+    margin-top: 18px;
+}
+h4 {
+    color: #4a5568;
+    font-size: 11pt;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 9pt;
+}
+th {
+    background-color: #2c5282;
+    color: white;
+    padding: 8px;
+    text-align: left;
+    border: 1px solid #2c5282;
+}
+td {
+    padding: 6px 8px;
+    border: 1px solid #cbd5e0;
+    vertical-align: top;
+}
+tr:nth-child(even) {
+    background-color: #f7fafc;
+}
+code {
+    font-family: 'Courier New', monospace;
+    background-color: #edf2f7;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 9pt;
+    color: #c53030;
+}
+pre {
+    background-color: #1a202c;
+    color: #e2e8f0;
+    padding: 12px;
+    border-radius: 5px;
+    overflow-x: auto;
+    font-size: 8pt;
+    line-height: 1.3;
+}
+pre code {
+    background-color: transparent;
+    color: #e2e8f0;
+    padding: 0;
+}
+strong {
+    color: #1a202c;
+}
+hr {
+    border: none;
+    border-top: 2px solid #cbd5e0;
+    margin: 20px 0;
+}
+ul, ol {
+    margin-top: 6px;
+    padding-left: 20px;
+}
+li {
+    margin-bottom: 3px;
+}
+</style>
+</head>
+<body>
+<h1 id="incident-response-playbook-network-forensics-with-wireshark">INCIDENT RESPONSE PLAYBOOK: NETWORK FORENSICS WITH WIRESHARK</h1>
+<p><strong>Version:</strong> 1.0<br />
+<strong>Classification:</strong> Training Material<br />
+<strong>Tool Focus:</strong> Wireshark + tshark<br />
+<strong>Audience:</strong> Security Analysts, IR Teams, Forensic Investigators</p>
+<hr />
+<h2 id="table-of-contents">TABLE OF CONTENTS</h2>
+<ol>
+<li><a href="#1-the-ir-forensic-mindset">The IR Forensic Mindset</a></li>
+<li><a href="#2-phase-0--preparation-before-the-incident">Phase 0 — Preparation: Before the Incident</a></li>
+<li><a href="#3-phase-1--identification-detecting-the-incident">Phase 1 — Identification: Detecting the Incident</a></li>
+<li><a href="#4-phase-2--containment-capturing-network-evidence">Phase 2 — Containment: Capturing Network Evidence</a></li>
+<li><a href="#5-phase-3--triage-first-pass-analysis">Phase 3 — Triage: First Pass Analysis</a></li>
+<li><a href="#6-phase-4--deep-dive-full-forensic-analysis">Phase 4 — Deep Dive: Full Forensic Analysis</a></li>
+<li><a href="#7-phase-5--evidence-extraction--iocs">Phase 5 — Evidence Extraction &amp; IOCs</a></li>
+<li><a href="#8-phase-6--timeline-reconstruction">Phase 6 — Timeline Reconstruction</a></li>
+<li><a href="#9-phase-7--reporting--documentation">Phase 7 — Reporting &amp; Documentation</a></li>
+<li><a href="#10-the-wireshark-filter-cheat-sheet">The Wireshark Filter Cheat Sheet</a></li>
+<li><a href="#11-tshark-quick-reference">tshark Quick Reference</a></li>
+<li><a href="#12-attack-pattern-recognition-guide">Attack Pattern Recognition Guide</a></li>
+<li><a href="#13-legal--chain-of-custody">Legal &amp; Chain of Custody</a></li>
+<li><a href="#14-appendix-a--practical-exercises">Appendix A — D�actical Exercises</a></li>
+<li><a href="#15-appendix-b--tool-arsenal">Appendix B — Tool Arsenal</a></li>
+</ol>
+<hr />
+<h2 id="1-the-ir-forensic-mindset">1. THE IR FORENSIC MINDSET</h2>
+<h3 id="the-core-principles">The Core Principles</h3>
+<table>
+<thead>
+<tr>
+<th>Principle</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Preserve Before You Analyze</strong></td>
+<td>Never work on the original pcap. Always work on a copy.</td>
+</tr>
+<tr>
+<td><strong>Assume Everything is Evidence</strong></td>
+<td>Traffic that looks innocent may be the attack.</td>
+</tr>
+<tr>
+<td><strong>Follow the Data, Not the Assumptions</strong></td>
+<td>Let the packets tell you what happened.</td>
+</tr>
+<tr>
+<td><strong>Correlate or Die</strong></td>
+<td>Single packets tell stories. Patterns tell truths.</td>
+</tr>
+<tr>
+<td><strong>Document Everything</strong></td>
+<td>If it's not written down, it didn't happen.</td>
+</tr>
+<tr>
+<td><strong>Speed Matters, Accuracy Matters More</strong></td>
+<td>Be fast but never skip steps.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-forensic-question-stack">The Forensic Question Stack</h3>
+<p>Every investigation answers these questions in order:</p>
+<div class="codehilite"><pre><span></span><code><span class="mf">1.</span><span class="w"> </span><span class="n">WHAT</span><span class="w"> </span><span class="n">happened</span><span class="err">?</span><span class="w">       </span><span class="err">→</span><span class="w"> </span><span class="n">Events</span><span class="w"> </span><span class="n">reconstructed</span>
+<span class="mf">2.</span><span class="w"> </span><span class="n">WHEN</span><span class="w"> </span><span class="n">did</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">happen</span><span class="err">?</span><span class="w">   </span><span class="err">→</span><span class="w"> </span><span class="n">Timeline</span>
+<span class="mf">3.</span><span class="w"> </span><span class="n">WHO</span><span class="w"> </span><span class="n">did</span><span class="w"> </span><span class="n">it</span><span class="err">?</span><span class="w">           </span><span class="err">→</span><span class="w"> </span><span class="n">Attribution</span><span class="w"> </span><span class="p">(</span><span class="n">IPs</span><span class="p">,</span><span class="w"> </span><span class="n">MACs</span><span class="p">,</span><span class="w"> </span><span class="n">infrastructure</span><span class="p">)</span>
+<span class="mf">4.</span><span class="w"> </span><span class="n">WHERE</span><span class="w"> </span><span class="n">did</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">happen</span><span class="err">?</span><span class="w">  </span><span class="err">→</span><span class="w"> </span><span class="n">Network</span><span class="w"> </span><span class="kr">to</span><span class="n">pology</span><span class="p">,</span><span class="w"> </span><span class="n">affected</span><span class="w"> </span><span class="n">hosts</span>
+<span class="mf">5.</span><span class="w"> </span><span class="n">HOW</span><span class="w"> </span><span class="n">did</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">happen</span><span class="err">?</span><span class="w">    </span><span class="err">→</span><span class="w"> </span><span class="n">Attack</span><span class="w"> </span><span class="n">vector</span><span class="p">,</span><span class="w"> </span><span class="kr">to</span><span class="n">ols</span><span class="p">,</span><span class="w"> </span><span class="n">techniques</span>
+<span class="mf">6.</span><span class="w"> </span><span class="n">WHY</span><span class="w"> </span><span class="n">did</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">happen</span><span class="err">?</span><span class="w">    </span><span class="err">→</span><span class="w"> </span><span class="n">Motive</span><span class="w"> </span><span class="p">(</span><span class="kd">data</span><span class="w"> </span><span class="n">theft</span><span class="p">,</span><span class="w"> </span><span class="n">persistence</span><span class="p">,</span><span class="w"> </span><span class="n">reconnaissance</span><span class="p">)</span>
+<span class="mf">7.</span><span class="w"> </span><span class="n">WHAT</span><span class="w"> </span><span class="n">was</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">impact</span><span class="err">?</span><span class="w">  </span><span class="err">→</span><span class="w"> </span><span class="kd">Data</span><span class="w"> </span><span class="n">exfiltrated</span><span class="p">,</span><span class="w"> </span><span class="kr">sys</span><span class="n">tems</span><span class="w"> </span><span class="n">compromised</span><span class="p">,</span><span class="w"> </span><span class="n">lateral</span><span class="w"> </span><span class="n">movement</span>
+</code></pre></div>
+
+<h3 id="the-three-truth-rule">The Three-Truth Rule</h3>
+<p>In network forensics, you seek three independent sources of truth:<br />
+1. <strong>Network truth</strong> — what the packets say<br />
+2. <strong>Host truth</strong> — what the endpoint logs/artifacts say<br />
+3. <strong>Threat intelligence truth</strong> — what external feeds say about IOCs</p>
+<p>When all three align, you have high confidence. When they diverge, you have a deeper problem.</p>
+<hr />
+<h2 id="2-phase-0-preparation-before-the-incident">2. PHASE 0 — PREPARATION: BEFORE THE INCIDENT</h2>
+<h3 id="21-lab-environment-setup">2.1 Lab Environment Setup</h3>
+<p><strong>Your workstation should have:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Purpose</th>
+<th>Install</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Wireshark</strong></td>
+<td>GUI analysis</td>
+<td><code>sudo pacman -S wireshark-qt</code></td>
+</tr>
+<tr>
+<td><strong>tshark</strong></td>
+<td>CLI analysis, scripting, automation</td>
+<td><code>sudo pacman -S wireshark-cli</code></td>
+</tr>
+<tr>
+<td><strong>tcpdump</strong></td>
+<td>Lightweight capture</td>
+<td><code>sudo pacman -S tcpdump</code></td>
+</tr>
+<tr>
+<td><strong>binwalk</strong></td>
+<td>Firmware/file carving</td>
+<td><code>sudo pacman -S binwalk</code></td>
+</tr>
+<tr>
+<td><strong>foremost</strong></td>
+<td>File carving from pcaps</td>
+<td><code>sudo pacman -S foremost</code></td>
+</tr>
+<tr>
+<td><strong>NetworkMiner</strong></td>
+<td>Auto artifact extraction</td>
+<td>AUR or download</td>
+</tr>
+<tr>
+<td><strong>zeek (Bro)</strong></td>
+<td>Protocol analysis at scale</td>
+<td><code>sudo pacman -S zeek</code></td>
+</tr>
+<tr>
+<td><strong>suricata</strong></td>
+<td>IDS/IPS signature detection</td>
+<td><code>sudo pacman -S suricata</code></td>
+</tr>
+<tr>
+<td><strong>volatility</strong></td>
+<td>Memory forensics (correlate)</td>
+<td><code>pip install volatility3</code> (in venv)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-capture-strategy">2.2 Capture Strategy</h3>
+<p><strong>Where to capture:</strong><br />
+- <strong>SPAN/mirror port</strong> on core switch → captures all LAN traffic<br />
+- <strong>Network TAP</strong> → inline, fail-safe, captures full-duplex<br />
+- <strong>Endpoint capture</strong> → <code>tcpdump</code> on suspect hosts<br />
+- <strong>Gateway/firewall</strong> → captures all inbound/outbound<br />
+- <strong>Cloud VPC flow logs</strong> → for cloud environments</p>
+<p><strong>What to capture (filter rules):</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Full capture (small networks):</span>
+tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>incident-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d-%H%M<span class="k">)</span>.pcap
+
+<span class="c1"># No broadcast/multicast (saves space):</span>
+tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>incident.pcap<span class="w"> </span>not<span class="w"> </span>broadcast<span class="w"> </span>and<span class="w"> </span>not<span class="w"> </span>multicast
+
+<span class="c1"># Specific suspect host:</span>
+tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>suspect.pcap<span class="w"> </span>host<span class="w"> </span><span class="m">192</span>.168.1.42
+
+<span class="c1"># Specific subnet:</span>
+tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>subnet.pcap<span class="w"> </span>net<span class="w"> </span><span class="m">192</span>.168.1.0/24
+
+<span class="c1"># Rotate files every 100MB or 1 hour:</span>
+tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>incident-%Y%m%d-%H%M.pcap<span class="w"> </span>-C<span class="w"> </span><span class="m">100</span><span class="w"> </span>-W<span class="w"> </span><span class="m">50</span><span class="w"> </span>-G<span class="w"> </span><span class="m">3600</span>
+</code></pre></div>
+
+<h3 id="23-pre-incident-baseline">2.3 Pre-Incident Baseline</h3>
+<p><strong>You cannot detect anomalies if you don't know what normal looks like.</strong></p>
+<p>Document before an incident:<br />
+- Normal DNS servers used<br />
+- Normal outbound ports<br />
+- Normal external partners/CDNs<br />
+- Normal bandwidth patterns<br />
+- Normal protocol breakdown<br />
+- DHCP ranges<br />
+- Critical asset IPs and MACs</p>
+<h3 id="24-chain-of-custody-kit">2.4 Chain of Custody Kit</h3>
+<p>Prepare these forms:<br />
+- <strong>Evidence Intake Form</strong> — description, source, datetime, hash<br />
+- <strong>Chain of Custody Form</strong> — who handled evidence, when, why<br />
+- <strong>Analysis Log</strong> — what was done, what was found</p>
+<p><strong>Always compute hashes immediately upon capture:</strong></p>
+<div class="codehilite"><pre><span></span><code>sha256sum<span class="w"> </span>incident.pcap<span class="w"> </span>&gt;<span class="w"> </span>incident.pcap.sha256
+md5sum<span class="w"> </span>incident.pcap<span class="w"> </span>&gt;<span class="w"> </span>incident.pcap.md5
+</code></pre></div>
+
+<hr />
+<h2 id="3-phase-1-identification-detecting-the-incident">3. PHASE 1 — IDENTIFICATION: DETECTING THE INCIDENT</h2>
+<h3 id="31-common-detection-sources">3.1 Common Detection Sources</h3>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>What It Tells You</th>
+<th>Priority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>IDS/IPS alert</strong> (Suricata/Snort)</td>
+<td>Signature match, known attack pattern</td>
+<td>HIGH</td>
+</tr>
+<tr>
+<td><strong>SIEM correlation</strong></td>
+<td>Multiple low-level events combining into a threat</td>
+<td>HIGH</td>
+</tr>
+<tr>
+<td><strong>Endpoint EDR</strong></td>
+<td>Process anomaly, file drop, registry change</td>
+<td>HIGH</td>
+</tr>
+<tr>
+<td><strong>Firewall logs</strong></td>
+<td>Unusual port access, blocked traffic, geo anomalies</td>
+<td>MED</td>
+</tr>
+<tr>
+<td><strong>User report</strong></td>
+<td>"My computer is acting weird"</td>
+<td>MED</td>
+</tr>
+<tr>
+<td><strong>DNS logs</strong></td>
+<td>DGA domains, tunneling, excessive queries</td>
+<td>MED</td>
+</tr>
+<tr>
+<td><strong>NetFlow data</strong></td>
+<td>Volume anomalies, beaconing patterns</td>
+<td>HIGH</td>
+</tr>
+<tr>
+<td><strong>Threat intel feed</strong></td>
+<td>Known C2 IPs/domains hitting your network</td>
+<td>HIGH</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-triage-questions-what-to-ask-when-an-alert-fires">3.2 Triage Questions — What to Ask When an Alert Fires</h3>
+<p><strong>Before touching Wireshark:</strong><br />
+1. What alert fired? (SID, rule name, description)<br />
+2. Which host(s) are involved?<br />
+3. Is this a known critical asset?<br />
+4. What time did the alert fire?<br />
+5. Is the traffic still ongoing?<br />
+6. Has this been seen before? (historical baseline)<br />
+7. What is the source IP? Internal or external?<br />
+8. What is the destination port?<br />
+9. Is geolocation relevant? (unexpected country)<br />
+10. What is the business impact? (asset criticality)</p>
+<h3 id="33-decision-tree-is-this-an-incident">3.3 Decision Tree — Is This an Incident?</h3>
+<div class="codehilite"><pre><span></span><code><span class="nv">Alert</span><span class="w"> </span><span class="nv">fires</span>
+├──<span class="w"> </span><span class="nv">Expected</span><span class="w"> </span><span class="nv">traffic</span>?<span class="w"> </span><span class="ss">(</span><span class="nv">check</span><span class="w"> </span><span class="nv">baseline</span><span class="ss">)</span>
+│<span class="w">   </span>├──<span class="w"> </span><span class="nv">YES</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Document</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">close</span><span class="w"> </span><span class="ss">(</span><span class="nv">false</span><span class="w"> </span><span class="nv">positive</span><span class="ss">)</span>
+│<span class="w">   </span>└──<span class="w"> </span><span class="nv">NO</span><span class="w"> </span>→<span class="w"> </span><span class="k">Continue</span><span class="w"> </span><span class="nv">investigation</span>
+├──<span class="w"> </span><span class="nv">Known</span><span class="w"> </span><span class="nv">threat</span><span class="w"> </span><span class="nv">signature</span>?
+│<span class="w">   </span>├──<span class="w"> </span><span class="nv">YES</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Escalate</span><span class="w"> </span><span class="nv">to</span><span class="w"> </span><span class="nv">IR</span>,<span class="w"> </span><span class="nv">begin</span><span class="w"> </span><span class="nv">capture</span>
+│<span class="w">   </span>└──<span class="w"> </span><span class="nv">NO</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Behavioral</span><span class="w"> </span><span class="nv">analysis</span><span class="w"> </span><span class="nv">needed</span><span class="w"> </span>→<span class="w"> </span><span class="k">Continue</span>
+├──<span class="w"> </span><span class="nv">Internal</span><span class="o">-</span><span class="nv">to</span><span class="o">-</span><span class="nv">internal</span><span class="w"> </span><span class="nv">traffic</span><span class="w"> </span><span class="nv">on</span><span class="w"> </span><span class="nv">unusual</span><span class="w"> </span><span class="nv">ports</span>?
+│<span class="w">   </span>├──<span class="w"> </span><span class="nv">YES</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Possible</span><span class="w"> </span><span class="nv">lateral</span><span class="w"> </span><span class="nv">movement</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Escalate</span>
+│<span class="w">   </span>└──<span class="w"> </span><span class="nv">NO</span><span class="w"> </span>→<span class="w"> </span><span class="k">Continue</span>
+├──<span class="w"> </span><span class="nv">Outbound</span><span class="w"> </span><span class="nv">traffic</span><span class="w"> </span><span class="nv">to</span><span class="w"> </span><span class="nv">unknown</span><span class="w"> </span><span class="nv">external</span><span class="w"> </span><span class="nv">IP</span>?
+│<span class="w">   </span>├──<span class="w"> </span><span class="nv">YES</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Possible</span><span class="w"> </span><span class="nv">C2</span><span class="w"> </span><span class="nv">or</span><span class="w"> </span><span class="nv">exfiltration</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Escalate</span>
+│<span class="w">   </span>└──<span class="w"> </span><span class="nv">NO</span><span class="w"> </span>→<span class="w"> </span><span class="k">Continue</span>
+└──<span class="w"> </span><span class="nv">Excessive</span><span class="w"> </span><span class="nv">traffic</span><span class="w"> </span><span class="nv">volume</span><span class="w"> </span><span class="nv">or</span><span class="w"> </span><span class="nv">beaconing</span><span class="w"> </span><span class="nv">pattern</span>?
+<span class="w">    </span>├──<span class="w"> </span><span class="nv">YES</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Possible</span><span class="w"> </span><span class="nv">C2</span><span class="w"> </span><span class="nv">beacon</span><span class="w"> </span><span class="nv">or</span><span class="w"> </span><span class="nv">data</span><span class="w"> </span><span class="nv">exfil</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Escalate</span>
+<span class="w">    </span>└──<span class="w"> </span><span class="nv">NO</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Document</span><span class="w"> </span><span class="nv">and</span><span class="w"> </span><span class="nv">monitor</span>
+</code></pre></div>
+
+<hr />
+<h2 id="4-phase-2-containment-capturing-network-evidence">4. PHASE 2 — CONTAINMENT: CAPTURING NETWORK EVIDENCE</h2>
+<h3 id="41-live-capture-during-an-active-incident">4.1 Live Capture During an Active Incident</h3>
+<p><strong>Priority order:</strong><br />
+1. Start capture immediately on the affected segment<br />
+2. Do NOT reboot or disconnect the host (yet) — capture first<br />
+3. Capture at all key points: gateway, suspect host, core switch<br />
+4. Save to non-volatile storage (not /tmp)</p>
+<p><strong>Commands:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Immediate full capture on the segment:</span>
+sudo<span class="w"> </span>tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>/cases/incident-001/full-<span class="k">$(</span>date<span class="w"> </span>+%Y%m%d-%H%M%S<span class="k">)</span>.pcap<span class="w"> </span>-W<span class="w"> </span><span class="m">100</span><span class="w"> </span>-C<span class="w"> </span><span class="m">100</span>
+
+<span class="c1"># Capture specific suspect host only:</span>
+sudo<span class="w"> </span>tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>/cases/incident-001/suspect.pcap<span class="w"> </span>host<span class="w"> </span><span class="m">10</span>.0.0.42
+
+<span class="c1"># Capture with no hostname resolution (faster):</span>
+sudo<span class="w"> </span>tcpdump<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-nn<span class="w"> </span>-w<span class="w"> </span>/cases/incident-001/full.pcap<span class="w"> </span>-W<span class="w"> </span><span class="m">100</span><span class="w"> </span>-C<span class="w"> </span><span class="m">100</span>
+</code></pre></div>
+
+<h3 id="42-what-not-to-do">4.2 What NOT to Do</h3>
+<table>
+<thead>
+<tr>
+<th>❌ Don't</th>
+<th>✅ Do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reboot the suspect host</td>
+<td>Capture traffic first, then isolate</td>
+</tr>
+<tr>
+<td>Disconnect from network immediately</td>
+<td>Capture live traffic before disconnecting</td>
+</tr>
+<tr>
+<td>Analyze the original pcap</td>
+<td>Copy it and work on the copy</td>
+</tr>
+<tr>
+<td>Delete "irrelevant" packets</td>
+<td>Keep everything — it may matter later</td>
+</tr>
+<tr>
+<td>Store evidence on the suspect machine</td>
+<td>Use external verified storage</td>
+</tr>
+<tr>
+<td>Use unencrypted storage for sensitive captures</td>
+<td>Encrypt evidence store (LUKS, GPG)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43-evidence-preservation">4.3 Evidence Preservation</h3>
+<p><strong>Immediately after capture:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Step 1: Copy original to working copy</span>
+cp<span class="w"> </span>incident.pcap<span class="w"> </span>incident-working.pcap
+
+<span class="c1"># Step 2: Hash both files</span>
+sha256sum<span class="w"> </span>incident.pcap<span class="w"> </span>&gt;<span class="w"> </span>incident.pcap.sha256
+sha256sum<span class="w"> </span>incident-working.pcap<span class="w"> </span>&gt;<span class="w"> </span>incident-working.pcap.sha256
+
+<span class="c1"># Step 3: Record chain of custody</span>
+<span class="c1"># - Who captured it (name, role)</span>
+<span class="c1"># - When (date, time, timezone)</span>
+<span class="c1"># - Where (which sensor/interface)</span>
+<span class="c1"># - What (description of capture)</span>
+<span class="c1"># - Hash values</span>
+
+<span class="c1"># Step 4: Store original in evidence safe</span>
+<span class="c1"># - Offline storage (USB, external HDD)</span>
+<span class="c1"># - Read-only mount</span>
+<span class="c1"># - Physical security</span>
+</code></pre></div>
+
+<hr />
+<h2 id="5-phase-3-triage-first-pass-analysis">5. PHASE 3 — TRIAGE: FIRST PASS ANALYSIS</h2>
+<h3 id="51-the-5-minute-triage-first-look-in-wireshark">5.1 The 5-Minute Triage (First Look in Wireshark)</h3>
+<p><strong>Goal:</strong> Within 5 minutes, determine if this is a real incident, and if so, what type.</p>
+<h4 id="step-1-file-overview">Step 1: File Overview</h4>
+<ul>
+<li>Open pcap in Wireshark</li>
+<li><strong>Status bar</strong> in bottom — check packet count, duration, file size</li>
+<li><code>File → File Properties</code> — confirms file integrity, hash, comments</li>
+</ul>
+<h4 id="step-2-protocol-hierarchy">Step 2: Protocol Hierarchy</h4>
+<ul>
+<li><code>Statistics → Protocol Hierarchy</code></li>
+<li>Look for:</li>
+<li><strong>Unexpected protocols</strong> (Telnet, IRC, SMB in a web environment)</li>
+<li><strong>Protocol anomalies</strong> (DNS over TCP instead of UDP, HTTP on non-standard ports)</li>
+<li><strong>Encrypted traffic percentage</strong> — high TLS may hide C2</li>
+</ul>
+<h4 id="step-3-conversations">Step 3: Conversations</h4>
+<ul>
+<li><code>Statistics → Conversations</code></li>
+<li>Check <strong>TCP</strong> tab:</li>
+<li>Who is talking to who?</li>
+<li>Any unusual port combinations?</li>
+<li>One host connecting to many ports on another? (port scan)</li>
+<li>Many hosts connecting to one external IP? (C2)</li>
+<li>Check <strong>IPv4</strong> tab:</li>
+<li>External IPs — are any unexpected?</li>
+<li>Internal IPs — are all within expected ranges?</li>
+</ul>
+<h4 id="step-4-endpoints">Step 4: Endpoints</h4>
+<ul>
+<li><code>Statistics → Endpoints</code></li>
+<li>Sort by bytes — who's sending/receiving the most data?</li>
+<li>Look for:</li>
+<li><strong>Top talkers</strong> — is the expected top talker, or is a compromised host?</li>
+<li><strong>External IPs with high data transfer</strong> — possible exfiltration</li>
+<li><strong>Broadcast/multicast anomalies</strong></li>
+</ul>
+<h4 id="step-5-io-graph">Step 5: I/O Graph</h4>
+<ul>
+<li><code>Statistics → I/O Graphs</code></li>
+<li>Look for:</li>
+<li><strong>Spikes</strong> — burst of activity at a specific time</li>
+<li><strong>Periodic patterns</strong> — beaconing (regular intervals)</li>
+<li><strong>Sustained high traffic</strong> — bulk data transfer</li>
+</ul>
+<p><strong>After these 5 steps, you should know:</strong><br />
+- What protocols are present<br />
+- Who the key players are<br />
+- Whether traffic patterns look malicious<br />
+- What sections need deep-dive</p>
+<h3 id="52-the-triage-conclusion">5.2 The Triage Conclusion</h3>
+<table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Likely Classification</th>
+<th>Next Step</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Telnet/SSH from external IP</td>
+<td>Remote access attack</td>
+<td>Follow streams, extract commands</td>
+</tr>
+<tr>
+<td>DNS with high entropy queries</td>
+<td>DNS tunneling or DGA</td>
+<td>Analyze DNS queries, extract data</td>
+</tr>
+<tr>
+<td>HTTP with encoded payloads</td>
+<td>C2 or exfiltration</td>
+<td>Decode payloads, extract IOCs</td>
+</tr>
+<tr>
+<td>Repeated SYN to many ports</td>
+<td>Port scan / enumeration</td>
+<td>Map scan target, assess exposure</td>
+</tr>
+<tr>
+<td>Large outbound HTTP/FTP</td>
+<td>Data exfiltration</td>
+<td>Export objects, identify data</td>
+</tr>
+<tr>
+<td>Beaconing pattern (regular gaps)</td>
+<td>C2 callback</td>
+<td>Calculate beacon interval, identify C2</td>
+</tr>
+<tr>
+<td>ARP storm</td>
+<td>ARP poisoning / MITM</td>
+<td>Check for duplicate MACs, ARP table</td>
+</tr>
+<tr>
+<td>Batch sessions on unusual ports</td>
+<td>Backdoor / reverse shell</td>
+<td>Follow streams, decode commands</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-phase-4-deep-dive-full-forensic-analysis">6. PHASE 4 — DEEP DIVE: FULL FORENSIC ANALYSIS</h2>
+<h3 id="61-the-wireshark-deep-dive-workflow">6.1 The Wireshark Deep Dive Workflow</h3>
+<p>This is the core methodology — the step-by-step process you follow for every pcap.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">┌─────────────────────────────────────────────────────┐</span>
+<span class="err">│</span><span class="w">  </span><span class="n">DEEP</span><span class="w"> </span><span class="n">DIVE</span><span class="w"> </span><span class="n">WORKFLOW</span><span class="w">                                   </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                                                       </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">1.</span><span class="w"> </span><span class="n">OVERVIEW</span><span class="w">                                     </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Open</span><span class="w"> </span><span class="n">file</span><span class="p">,</span><span class="w"> </span><span class="n">read</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="n">bar</span><span class="w">                  </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="n">properties</span><span class="w"> </span><span class="err">—</span><span class="w"> </span><span class="n">verify</span><span class="w"> </span><span class="nb">hash</span><span class="w">               </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Protocol</span><span class="w"> </span><span class="n">hierarchy</span><span class="w"> </span><span class="err">—</span><span class="w"> </span><span class="n">map</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">protocols</span><span class="w">     </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────┬───────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                    </span><span class="err">▼</span><span class="w">                                 </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">2.</span><span class="w"> </span><span class="n">CONVERSATION</span><span class="w"> </span><span class="n">MAP</span><span class="w">                             </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Statistics</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Conversations</span><span class="w"> </span><span class="p">(</span><span class="n">TCP</span><span class="p">)</span><span class="w">            </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Identify</span><span class="w"> </span><span class="n">all</span><span class="w"> </span><span class="n">unique</span><span class="w"> </span><span class="n">flows</span><span class="w">                    </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Highlight</span><span class="w"> </span><span class="n">unusual</span><span class="w"> </span><span class="n">ports</span><span class="w">                      </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Note</span><span class="w"> </span><span class="n">external</span><span class="w"> </span><span class="n">IPs</span><span class="w">                           </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────┬───────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                    </span><span class="err">▼</span><span class="w">                                 </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">3.</span><span class="w"> </span><span class="n">ENDPOINT</span><span class="w"> </span><span class="n">ANALYSIS</span><span class="w">                            </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Statistics</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Endpoints</span><span class="w"> </span><span class="p">(</span><span class="n">IPv4</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">Ethernet</span><span class="p">)</span><span class="w">   </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Sort</span><span class="w"> </span><span class="n">by</span><span class="w"> </span><span class="n">traffic</span><span class="w"> </span><span class="n">volume</span><span class="w">                      </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Identify</span><span class="w"> </span><span class="n">top</span><span class="w"> </span><span class="n">talkers</span><span class="w">                        </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Identify</span><span class="w"> </span><span class="n">external</span><span class="w"> </span><span class="n">IPs</span><span class="w">                       </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────┬───────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                    </span><span class="err">▼</span><span class="w">                                 </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">4.</span><span class="w"> </span><span class="n">FILTER</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="n">ISOLATE</span><span class="w">                             </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Apply</span><span class="w"> </span><span class="n">display</span><span class="w"> </span><span class="n">filters</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">isolate</span><span class="w"> </span><span class="n">each</span><span class="w"> </span><span class="n">flow</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Examine</span><span class="w"> </span><span class="n">one</span><span class="w"> </span><span class="n">conversation</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="n">time</span><span class="w">          </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Note</span><span class="w"> </span><span class="n">ports</span><span class="p">,</span><span class="w"> </span><span class="n">protocols</span><span class="p">,</span><span class="w"> </span><span class="n">payload</span><span class="w"> </span><span class="n">sizes</span><span class="w">        </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────┬───────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                    </span><span class="err">▼</span><span class="w">                                 </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">5.</span><span class="w"> </span><span class="n">FOLLOW</span><span class="w"> </span><span class="n">STREAMS</span><span class="w"> </span><span class="p">(</span><span class="n">THE</span><span class="w"> </span><span class="n">KILL</span><span class="w"> </span><span class="n">SHOT</span><span class="p">)</span><span class="w">               </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Right</span><span class="o">-</span><span class="n">click</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Follow</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">TCP</span><span class="w"> </span><span class="n">Stream</span><span class="w">           </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Read</span><span class="w"> </span><span class="n">conversation</span><span class="w"> </span><span class="err">—</span><span class="w"> </span><span class="n">client</span><span class="w"> </span><span class="p">(</span><span class="n">blue</span><span class="p">)</span><span class="w"> </span><span class="n">vs</span><span class="w"> </span><span class="n">server</span><span class="w"> </span><span class="p">(</span><span class="n">red</span><span class="p">)</span><span class="w"> </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Decode</span><span class="w"> </span><span class="n">commands</span><span class="p">,</span><span class="w"> </span><span class="n">responses</span><span class="p">,</span><span class="w"> </span><span class="n">credentials</span><span class="w">   </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Screenshot</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">evidence</span><span class="w">                    </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────┬───────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                    </span><span class="err">▼</span><span class="w">                                 </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">6.</span><span class="w"> </span><span class="n">PAYLOAD</span><span class="w"> </span><span class="n">EXTRACTION</span><span class="w">                           </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">Export</span><span class="w"> </span><span class="n">Objects</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">HTTP</span><span class="o">/</span><span class="n">SMB</span><span class="w">            </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Check</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="n">transferred</span><span class="w"> </span><span class="n">files</span><span class="w">                </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Extract</span><span class="w"> </span><span class="n">credentials</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">cleartext</span><span class="w">         </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Decode</span><span class="w"> </span><span class="n">encoded</span><span class="o">/</span><span class="n">encrypted</span><span class="w"> </span><span class="n">payloads</span><span class="w">          </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────┬───────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                    </span><span class="err">▼</span><span class="w">                                 </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">7.</span><span class="w"> </span><span class="n">ANOMALY</span><span class="w"> </span><span class="n">HUNTING</span><span class="w">                             </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">DNS</span><span class="w"> </span><span class="n">tunneling</span><span class="w"> </span><span class="p">(</span><span class="n">TCP</span><span class="w"> </span><span class="mi">53</span><span class="p">,</span><span class="w"> </span><span class="n">high</span><span class="o">-</span><span class="n">entropy</span><span class="w"> </span><span class="n">queries</span><span class="p">)</span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Beaconing</span><span class="w"> </span><span class="p">(</span><span class="n">regular</span><span class="w"> </span><span class="n">interval</span><span class="w"> </span><span class="n">patterns</span><span class="p">)</span><span class="w">       </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Covert</span><span class="w"> </span><span class="n">channels</span><span class="w"> </span><span class="p">(</span><span class="n">shell</span><span class="w"> </span><span class="n">on</span><span class="w"> </span><span class="n">non</span><span class="o">-</span><span class="n">standard</span><span class="w"> </span><span class="n">ports</span><span class="p">)</span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Data</span><span class="w"> </span><span class="n">exfiltration</span><span class="w"> </span><span class="p">(</span><span class="n">large</span><span class="w"> </span><span class="n">outbound</span><span class="w"> </span><span class="n">transfers</span><span class="p">)</span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Lateral</span><span class="w"> </span><span class="n">movement</span><span class="w"> </span><span class="p">(</span><span class="n">internal</span><span class="o">-</span><span class="n">to</span><span class="o">-</span><span class="n">internal</span><span class="p">)</span><span class="w">     </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────┬───────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">                    </span><span class="err">▼</span><span class="w">                                 </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">┌─────────────────────────────────────────────────┐</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w"> </span><span class="mf">8.</span><span class="w"> </span><span class="n">IOC</span><span class="w"> </span><span class="n">EXTRACTION</span><span class="w">                              </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">IPs</span><span class="p">,</span><span class="w"> </span><span class="n">domains</span><span class="p">,</span><span class="w"> </span><span class="n">ports</span><span class="w">                         </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">File</span><span class="w"> </span><span class="n">hashes</span><span class="p">,</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="n">names</span><span class="w">                     </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">User</span><span class="w"> </span><span class="n">agents</span><span class="p">,</span><span class="w"> </span><span class="n">cookies</span><span class="w">                        </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Commands</span><span class="w"> </span><span class="n">executed</span><span class="w">                           </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">│</span><span class="w">   </span><span class="err">•</span><span class="w"> </span><span class="n">Registry</span><span class="w"> </span><span class="n">keys</span><span class="w"> </span><span class="p">(</span><span class="k">if</span><span class="w"> </span><span class="n">endpoints</span><span class="w"> </span><span class="n">correlate</span><span class="p">)</span><span class="w">      </span><span class="err">│</span><span class="w"> </span><span class="err">│</span>
+<span class="err">│</span><span class="w">  </span><span class="err">└─────────────────────────────────────────────────┘</span><span class="w"> </span><span class="err">│</span>
+<span class="err">└─────────────────────────────────────────────────────┘</span>
+</code></pre></div>
+
+<h3 id="62-follow-tcp-stream-the-1-skill">6.2 Follow TCP Stream — The #1 Skill</h3>
+<p><strong>Why it's the most important skill:</strong><br />
+- It reconstructs the full conversation between two hosts<br />
+- It shows you the actual commands, responses, and data<br />
+- It decodes the raw bytes into readable text<br />
+- It color-codes client vs server traffic<br />
+- It reveals credentials, commands, exfiltrated data</p>
+<p><strong>How to do it in Wireshark:</strong><br />
+1. Filter to the conversation of interest (<code>tcp.port == X</code>)<br />
+2. Right-click any packet in that conversation<br />
+3. <code>Follow → TCP Stream</code><br />
+4. A new window opens with the full conversation</p>
+<p><strong>Reading the output:</strong><br />
+- <strong>Red text</strong> = Server → Client (responses, banners, output)<br />
+- <strong>Blue text</strong> = Client → Server (commands, requests, data uploads)<br />
+- <strong>Black text</strong> = Direction unclear or mixed</p>
+<p><strong>Pro tip — Save the stream:</strong><br />
+- In the Follow Stream window, click <code>Save as</code><br />
+- Save as <code>.txt</code> for evidence preservation<br />
+- Name it: <code>stream-&lt;src&gt;-&lt;port&gt;-&lt;dst&gt;-&lt;port&gt;.txt</code></p>
+<p><strong>Advanced — Filtering by stream:</strong><br />
+After following a stream, Wireshark auto-applies a filter like:</p>
+<div class="codehilite"><pre><span></span><code>tcp.stream eq 5
+</code></pre></div>
+
+<p>You can manually type this to jump directly to a specific stream.</p>
+<h3 id="63-protocol-specific-deep-dives">6.3 Protocol-Specific Deep Dives</h3>
+<h4 id="631-dns-analysis">6.3.1 DNS Analysis</h4>
+<p><strong>Normal DNS:</strong><br />
+- UDP port 53<br />
+- Query → Response pattern<br />
+- Hostnames are readable<br />
+- Small payloads (&lt; 512 bytes typically)</p>
+<p><strong>Suspicious DNS patterns:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Filter</th>
+<th>What it Means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DNS over TCP</td>
+<td><code>tcp.port == 53 &amp;&amp; dns</code></td>
+<td>Unusual — may be tunneling</td>
+</tr>
+<tr>
+<td>High-entropy query names</td>
+<td><code>dns.qry.name</code> — look at values</td>
+<td>DNS tunneling — data exfiltration via query names</td>
+</tr>
+<tr>
+<td>Many queries to same domain</td>
+<td><code>dns.qry.name contains "evil.com"</code></td>
+<td>C2 via DNS</td>
+</tr>
+<tr>
+<td>TXT record abuse</td>
+<td><code>dns.txt</code></td>
+<td>Data exfiltration via TXT records</td>
+</tr>
+<tr>
+<td>Long query labels</td>
+<td>Manual inspection</td>
+<td>Each label &gt; 63 chars is suspicious</td>
+</tr>
+<tr>
+<td>Excessive NXDOMAIN responses</td>
+<td><code>dns.flags.rcode == 3</code></td>
+<td>DGA (domain generation algorithm)</td>
+</tr>
+<tr>
+<td>DNS requests to non-standard servers</td>
+<td>Check destination IPs</td>
+<td>Bypassing internal DNS — direct to attacker</td>
+</tr>
+</tbody>
+</table>
+<p><strong>DNS Tunneling Detection:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="n">Filter</span><span class="o">:</span><span class="w"> </span><span class="n">udp</span><span class="o">.</span><span class="na">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">53</span>
+
+<span class="n">Look</span><span class="w"> </span><span class="k">for</span><span class="o">:</span>
+<span class="mi">1</span><span class="o">.</span><span class="w"> </span><span class="n">Query</span><span class="w"> </span><span class="n">names</span><span class="w"> </span><span class="n">that</span><span class="w"> </span><span class="n">are</span><span class="w"> </span><span class="n">random</span><span class="o">-</span><span class="n">looking</span><span class="w"> </span><span class="o">(</span><span class="n">base32</span><span class="o">/</span><span class="n">hex</span><span class="w"> </span><span class="n">encoded</span><span class="o">)</span>
+<span class="w">   </span><span class="n">Example</span><span class="o">:</span><span class="w"> </span><span class="n">JFGHJKDS732NDJA</span><span class="o">.</span><span class="na">evil</span><span class="o">.</span><span class="na">com</span><span class="w"> </span><span class="err">—</span><span class="w"> </span><span class="n">likely</span><span class="w"> </span><span class="n">encoded</span><span class="w"> </span><span class="n">data</span>
+<span class="mi">2</span><span class="o">.</span><span class="w"> </span><span class="n">Frequent</span><span class="w"> </span><span class="n">queries</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="n">short</span><span class="w"> </span><span class="n">time</span><span class="w"> </span><span class="o">(</span><span class="n">burst</span><span class="w"> </span><span class="n">pattern</span><span class="o">)</span>
+<span class="mi">3</span><span class="o">.</span><span class="w"> </span><span class="n">TXT</span><span class="w"> </span><span class="n">responses</span><span class="w"> </span><span class="k">with</span><span class="w"> </span><span class="n">long</span><span class="w"> </span><span class="n">strings</span>
+<span class="mi">4</span><span class="o">.</span><span class="w"> </span><span class="n">Queries</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">domains</span><span class="w"> </span><span class="n">you</span><span class="w"> </span><span class="n">don</span><span class="err">&#39;</span><span class="n">t</span><span class="w"> </span><span class="n">recognize</span>
+<span class="mi">5</span><span class="o">.</span><span class="w"> </span><span class="n">One</span><span class="w"> </span><span class="n">host</span><span class="w"> </span><span class="n">making</span><span class="w"> </span><span class="mi">100</span><span class="n">s</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">DNS</span><span class="w"> </span><span class="n">queries</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">the</span><span class="w"> </span><span class="n">same</span><span class="w"> </span><span class="n">domain</span>
+</code></pre></div>
+
+<p><strong>Extracting DNS data with tshark:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># All DNS queries and responses:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;dns&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>frame.number<span class="w"> </span>-e<span class="w"> </span>frame.time<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ip.dst<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>dns.qry.name<span class="w"> </span>-e<span class="w"> </span>dns.a<span class="w"> </span>-e<span class="w"> </span>dns.flags.response
+
+<span class="c1"># Unique domains queried:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;dns.flags.response == 0&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>dns.qry.name<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+
+<span class="c1"># DNS queries to specific domain:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s1">&#39;dns.qry.name contains &quot;evil&quot;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>frame.number<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>dns.qry.name
+</code></pre></div>
+
+<h4 id="632-http-analysis">6.3.2 HTTP Analysis</h4>
+<p><strong>Quick wins:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># All HTTP requests:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.request&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>frame.number<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ip.dst<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>http.request.method<span class="w"> </span>-e<span class="w"> </span>http.host<span class="w"> </span>-e<span class="w"> </span>http.request.uri
+
+<span class="c1"># All HTTP responses (status codes):</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.response&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>frame.number<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>http.response.code<span class="w"> </span>-e<span class="w"> </span>http.content_type
+
+<span class="c1"># POST requests (data upload):</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.request.method == POST&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>frame.number<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>http.host<span class="w"> </span>-e<span class="w"> </span>http.request.uri
+</code></pre></div>
+
+<p><strong>In Wireshark:</strong><br />
+- Filter: <code>http.request</code> — all web requests<br />
+- Filter: <code>http.response.code == 200</code> — successful responses<br />
+- Filter: <code>http.request.method == POST</code> — data being sent<br />
+- <code>File → Export Objects → HTTP</code> — extract transferred files</p>
+<p><strong>What to look for:</strong><br />
+- <strong>Unusual User-Agent strings</strong> — malware often has unique UAs<br />
+- Encoded URLs (<code>%2f</code>, base64 in path)<br />
+- POST to unknown external domains<br />
+- Large HTTP responses (file downloads)<br />
+- Unusual Content-Type (e.g., <code>application/octet-stream</code> = binary download)</p>
+<h4 id="633-tlsssl-analysis">6.3.3 TLS/SSL Analysis</h4>
+<p><strong>What you CAN see:</strong><br />
+- SNI (Server Name Indication) — the domain being requested<br />
+- Certificate details — issuer, subject, validity<br />
+- Cipher suite negotiation<br />
+- TLS version<br />
+- Traffic volume and timing (metadata)</p>
+<p><strong>What you CANNOT see (without keys):</strong><br />
+- The actual content (encrypted)</p>
+<p><strong>Filters:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="err">#</span><span class="w"> </span><span class="nx">All</span><span class="w"> </span><span class="nx">TLS</span><span class="w"> </span><span class="nx">handshakes</span><span class="p">:</span>
+<span class="nx">tls</span><span class="p">.</span><span class="nx">handshake</span><span class="p">.</span><span class="k">type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span>
+
+<span class="err">#</span><span class="w"> </span><span class="nx">Server</span><span class="w"> </span><span class="nx">Name</span><span class="w"> </span><span class="p">(</span><span class="nx">SNI</span><span class="p">):</span>
+<span class="nx">tls</span><span class="p">.</span><span class="nx">handshake</span><span class="p">.</span><span class="nx">extensions_server_name</span>
+
+<span class="err">#</span><span class="w"> </span><span class="nx">Certificate</span><span class="p">:</span>
+<span class="nx">tls</span><span class="p">.</span><span class="nx">handshake</span><span class="p">.</span><span class="nx">certificate</span>
+
+<span class="err">#</span><span class="w"> </span><span class="nx">TLS</span><span class="w"> </span><span class="nx">version</span><span class="p">:</span>
+<span class="nx">tls</span><span class="p">.</span><span class="nx">record</span><span class="p">.</span><span class="nx">version</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mh">0x0301</span><span class="w">  </span><span class="p">(</span><span class="nx">TLS</span><span class="w"> </span><span class="m m-Double">1.0</span><span class="p">)</span>
+<span class="nx">tls</span><span class="p">.</span><span class="nx">record</span><span class="p">.</span><span class="nx">version</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mh">0x0303</span><span class="w">  </span><span class="p">(</span><span class="nx">TLS</span><span class="w"> </span><span class="m m-Double">1.2</span><span class="p">)</span>
+
+<span class="err">#</span><span class="w"> </span><span class="nx">Specific</span><span class="w"> </span><span class="nx">SNI</span><span class="p">:</span>
+<span class="nx">tls</span><span class="p">.</span><span class="nx">handshake</span><span class="p">.</span><span class="nx">extensions_server_name</span><span class="w"> </span><span class="nx">contains</span><span class="w"> </span><span class="s">&quot;evil&quot;</span>
+</code></pre></div>
+
+<p><strong>tshark:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Extract all SNIs:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;tls.handshake.type == 1&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ip.dst<span class="w"> </span>-e<span class="w"> </span>tls.handshake.extensions_server_name
+
+<span class="c1"># Extract certificate subjects:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;tls.handshake.certificate&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>x509ce.distinguishedName
+</code></pre></div>
+
+<h4 id="634-smb-analysis-lateral-movement">6.3.4 SMB Analysis (Lateral Movement)</h4>
+<div class="codehilite"><pre><span></span><code><span class="gh">#</span> SMB2 commands:
+smb2.cmd == 5   (CREATE — file access)
+smb2.cmd == 6   (CLOSE)
+smb2.cmd == 8   (READ)
+smb2.cmd == 9   (WRITE)
+
+<span class="gh">#</span> File copy via SMB:
+smb2.filename
+smb2.file_name
+
+<span class="gh">#</span> Administrative shares:
+smb2.filename contains &quot;C$&quot;
+smb2.filename contains &quot;ADMIN$&quot;
+</code></pre></div>
+
+<h4 id="635-telnet-analysis">6.3.5 Telnet Analysis</h4>
+<div class="codehilite"><pre><span></span><code>#<span class="w"> </span><span class="nv">All</span><span class="w"> </span><span class="nv">Telnet</span><span class="w"> </span><span class="nv">traffic</span>:
+<span class="nv">telnet</span>
+
+#<span class="w"> </span><span class="nv">Telnet</span><span class="w"> </span><span class="nv">with</span><span class="w"> </span><span class="nv">data</span>:
+<span class="nv">telnet</span>.<span class="nv">data</span>
+
+#<span class="w"> </span><span class="nv">Follow</span><span class="w"> </span><span class="nv">stream</span><span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="nv">full</span><span class="w"> </span><span class="nv">session</span>:
+<span class="nv">Right</span><span class="o">-</span><span class="nv">click</span><span class="w"> </span>→<span class="w"> </span><span class="nv">Follow</span><span class="w"> </span>→<span class="w"> </span><span class="nv">TCP</span><span class="w"> </span><span class="nv">Stream</span>
+</code></pre></div>
+
+<p><strong>In the Follow Stream, look for:</strong><br />
+- Login banners (OS version, hostname)<br />
+- Username/password prompts<br />
+- Commands entered<br />
+- Data returned<br />
+- Any privilege escalation attempts</p>
+<h3 id="64-anomaly-hunting-techniques">6.4 Anomaly Hunting Techniques</h3>
+<h4 id="641-beaconing-detection">6.4.1 Beaconing Detection</h4>
+<p><strong>Beaconing</strong> = regular, periodic connections to a C2 server.</p>
+<p><strong>In Wireshark:</strong><br />
+1. Identify suspect host → external IP<br />
+2. Filter: <code>ip.addr == &lt;suspect&gt; &amp;&amp; ip.addr == &lt;external&gt;</code><br />
+3. Look at the time column — are connections at regular intervals?<br />
+4. <code>Statistics → Flow Graph</code> — visualize the timing<br />
+5. <code>Statistics → TCP Flow Graph</code> — connection patterns</p>
+<p><strong>With tshark:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Timestamps of all connections to a specific IP:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;ip.dst == 10.1.2.3 &amp;&amp; tcp.flags.syn == 1&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>frame.time<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort
+
+<span class="c1"># Calculate intervals in Python:</span>
+<span class="c1"># (feed the timestamps above into a script that computes delta between each)</span>
+</code></pre></div>
+
+<p><strong>Beaconing indicators:</strong><br />
+- Regular intervals (e.g., every 30s, 60s, 300s)<br />
+- Small, similar-sized packets<br />
+- Same destination IP and port<br />
+- Often over HTTP or DNS</p>
+<h4 id="642-data-exfiltration-detection">6.4.2 Data Exfiltration Detection</h4>
+<p><strong>Signs:</strong><br />
+- Large outbound transfer to external IP<br />
+- Non-standard ports for bulk transfer<br />
+- Encrypted traffic to unknown endpoints<br />
+- DNS queries with large payloads<br />
+- HTTP POST with large body</p>
+<p><strong>Filters:</strong></p>
+<div class="codehilite"><pre><span></span><code><span class="gh">#</span> Large HTTP POST bodies:
+http.request.method == POST &amp;&amp; http.content_length &gt; 10000
+
+<span class="gh">#</span> Long DNS queries (tunneling):
+udp.length &gt; 200
+
+<span class="gh">#</span> Specific large outbound transfer:
+ip.src == 192.168.1.42 &amp;&amp; tcp.len &gt; 1000
+</code></pre></div>
+
+<p><strong>Statistics → I/O Graph:</strong><br />
+- Set Y axis to bytes<br />
+- Look for large outbound spikes<br />
+- Filter to specific host to isolate</p>
+<h4 id="643-lateral-movement-detection">6.4.3 Lateral Movement Detection</h4>
+<p><strong>Signs:</strong><br />
+- Internal host connecting to other internal hosts on admin ports<br />
+- SMB, RDP, WMI, WinRM traffic between workstations<br />
+- PsExec, WMI, or DCOM activity<br />
+- New service Creation (SCM)<br />
+- Authentication bursts (pass-the-hash)</p>
+<p><strong>Filters:</strong></p>
+<div class="codehilite"><pre><span></span><code># SMB between internal hosts:
+ip.src == 192.168.1.0/24 &amp;&amp; ip.dst == 192.168.1.0/24 &amp;&amp; smb
+
+# RDP traffic:
+tcp.port == 3389
+
+# WinRM:
+tcp.port == 5985 || tcp.port == 5986
+
+# PsExec (uses SMB named pipes):
+smb2.filename contains &quot;psexesvc&quot;
+</code></pre></div>
+
+<hr />
+<h2 id="7-phase-5-evidence-extraction-iocs">7. PHASE 5 — EVIDENCE EXTRACTION &amp; IOCs</h2>
+<h3 id="71-what-to-extract">7.1 What to Extract</h3>
+<table>
+<thead>
+<tr>
+<th>Evidence Type</th>
+<th>Method</th>
+<th>Tool</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Transferred files</td>
+<td><code>File → Export Objects</code></td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>Credentials (cleartext)</td>
+<td>Follow Stream, search</td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>Commands executed</td>
+<td>Follow Stream on shell sessions</td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>DNS domains</td>
+<td><code>dns.qry.name</code> field extraction</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>IP addresses</td>
+<td>Endpoint/conversation export</td>
+<td>Both</td>
+</tr>
+<tr>
+<td>File hashes</td>
+<td>Export then hash externally</td>
+<td>Export + <code>sha256sum</code></td>
+</tr>
+<tr>
+<td>User-Agent strings</td>
+<td><code>http.user_agent</code> field</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>Certificates</td>
+<td>TLS certificate extraction</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>Cookies</td>
+<td><code>http.cookie</code> field</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>URLs</td>
+<td><code>http.request.full_uri</code></td>
+<td>tshark</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72-tshark-ioc-extraction-cheatsheet">7.2 tshark IOC Extraction Cheatsheet</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># ===== IPs =====</span>
+<span class="c1"># All unique IPs:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ip.dst<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tr<span class="w"> </span><span class="s1">&#39;\t&#39;</span><span class="w"> </span><span class="s1">&#39;\n&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+
+<span class="c1"># ===== DOMAINS =====</span>
+<span class="c1"># All DNS queries:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;dns.flags.response == 0&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>dns.qry.name<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+
+<span class="c1"># ===== URLs =====</span>
+<span class="c1"># All HTTP URLs:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.request&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>http.host<span class="w"> </span>-e<span class="w"> </span>http.request.uri<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+
+<span class="c1"># ===== USER AGENTS =====</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.user_agent&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>http.user_agent<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u
+
+<span class="c1"># ===== CREDENTIALS =====</span>
+<span class="c1"># HTTP Basic Auth:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.authorization&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>http.authorization
+
+<span class="c1"># FTP credentials:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;ftp.request.command == USER || ftp.request.command == PASS&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ftp.request.arg
+
+<span class="c1"># ===== FILES =====</span>
+<span class="c1"># HTTP objects:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>--export-objects<span class="w"> </span>http,/tmp/http-objects/
+
+<span class="c1"># SMB objects:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>--export-objects<span class="w"> </span>smb,/tmp/smb-objects/
+
+<span class="c1"># ===== CERTIFICATES =====</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;tls.handshake.certificate&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>x509ce.distinguishedName
+
+<span class="c1"># ===== FULL CONVERSATIONS =====</span>
+<span class="c1"># Follow stream via tshark:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>follow,tcp,ascii,0
+<span class="c1"># (0 = stream index, change for each stream)</span>
+</code></pre></div>
+
+<h3 id="73-ioc-output-format">7.3 IOC Output Format</h3>
+<p><strong>Standard IOC table for your report:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Value</th>
+<th>Context</th>
+<th>Source Frame</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>IP</td>
+<td>192.168.1.3</td>
+<td>Attacker — internal lateral source</td>
+<td>All</td>
+</tr>
+<tr>
+<td>IP</td>
+<td>83.170.75.178</td>
+<td>External HTTP — web1.goals365.com</td>
+<td>F74</td>
+</tr>
+<tr>
+<td>Domain</td>
+<td>web1.goals365.com</td>
+<td>Resolved to 83.170.75.178</td>
+<td>F74</td>
+</tr>
+<tr>
+<td>Port</td>
+<td>TCP 53</td>
+<td>Covert shell channel (non-DNS)</td>
+<td>F14-38</td>
+</tr>
+<tr>
+<td>Port</td>
+<td>TCP 23</td>
+<td>Telnet backdoor</td>
+<td>F76-108</td>
+</tr>
+<tr>
+<td>File</td>
+<td>installer-debug.txt</td>
+<td>On victim C:\ — 11,531 bytes</td>
+<td>F89</td>
+</tr>
+<tr>
+<td>Command</td>
+<td>dir</td>
+<td>Executed by attacker</td>
+<td>F25, F87, F119</td>
+</tr>
+<tr>
+<td>Command</td>
+<td>ls -la</td>
+<td>Failed — attacker Linux-adapted</td>
+<td>F97</td>
+</tr>
+<tr>
+<td>MAC</td>
+<td>00:80:48:24:33:32</td>
+<td>Victim NIC — Premier Imaging</td>
+<td>F13</td>
+</tr>
+<tr>
+<td>OS</td>
+<td>Windows XP 5.1.2600</td>
+<td>Victim OS from Telnet banner</td>
+<td>F21, F83</td>
+</tr>
+<tr>
+<td>Hash</td>
+<td>SHA256 of pcap</td>
+<td>Evidence integrity</td>
+<td>File properties</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-phase-6-timeline-reconstruction">8. PHASE 6 — TIMELINE RECONSTRUCTION</h2>
+<h3 id="81-how-to-build-a-timeline">8.1 How to Build a Timeline</h3>
+<p><strong>Step 1: Extract all events with timestamps</strong></p>
+<div class="codehilite"><pre><span></span><code>tshark<span class="w"> </span>-r<span class="w"> </span>incident.pcap<span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>frame.number<span class="w"> </span>-e<span class="w"> </span>frame.time<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ip.dst<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>_ws.col.Protocol<span class="w"> </span>-e<span class="w"> </span>_ws.col.Info<span class="w"> </span>&gt;<span class="w"> </span>timeline_raw.tsv
+</code></pre></div>
+
+<p><strong>Step 2: Group into events</strong></p>
+<p>Group individual packets into logical events:<br />
+- All packets in a TCP conversation = one event<br />
+- DNS query+response = one event<br />
+- ARP exchange = one event<br />
+- SSH session = one event</p>
+<p><strong>Step 3: Order and annotate</strong></p>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Duration</th>
+<th>Event</th>
+<th>Source → Dest</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.000s</td>
+<td>—</td>
+<td>ARP Request</td>
+<td>.3 → .1</td>
+<td>Who has 192.168.1.1?</td>
+</tr>
+<tr>
+<td>0.017s</td>
+<td>—</td>
+<td>DNS PTR Query</td>
+<td>.3 → .1</td>
+<td>Reverse lookup for 192.168.1.1</td>
+</tr>
+<tr>
+<td>0.020s</td>
+<td>—</td>
+<td>DNS PTR Response</td>
+<td>.1 → .3</td>
+<td>SpeedTouch.lan</td>
+</tr>
+<tr>
+<td>2.629s</td>
+<td>—</td>
+<td>DNS A Query</td>
+<td>.3 → .1</td>
+<td>www.www.com.lan</td>
+</tr>
+<tr>
+<td>25.493s</td>
+<td>5.3s</td>
+<td>TCP Session</td>
+<td>.3 → .2:53</td>
+<td>Remote shell on DNS port</td>
+</tr>
+<tr>
+<td>48.475s</td>
+<td>6.1s</td>
+<td>Port Scan</td>
+<td>.3 → .2:21</td>
+<td>6 SYN → 6 RST (FTP closed)</td>
+</tr>
+<tr>
+<td>75.777s</td>
+<td>9.8s</td>
+<td>Telnet Session</td>
+<td>.3 → .2:23</td>
+<td>Interactive shell — dir, ls, exit</td>
+</tr>
+<tr>
+<td>96.444s</td>
+<td>3.3s</td>
+<td>HTTP Session</td>
+<td>.3 → .2:80</td>
+<td>Shell on HTTP port — dir, exit</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Step 4: Identify the attack chain</strong></p>
+<p>Map events to the attack lifecycle:</p>
+<div class="codehilite"><pre><span></span><code>Recon → Initial Access → Execution → Persistence → Lateral Movement → C2 → Exfiltration
+</code></pre></div>
+
+<p>Not every phase will be present in every pcap — but map what you see.</p>
+<h3 id="82-visual-timeline-with-wireshark">8.2 Visual Timeline with Wireshark</h3>
+<p><strong>Wireshark's Flow Graph:</strong><br />
+1. <code>Statistics → Flow Graph</code><br />
+2. This shows a visual timeline of all conversations<br />
+3. You can see the sequence of events at a glance<br />
+4. Filter to specific hosts/ports first for clarity</p>
+<p><strong>I/O Graph:</strong><br />
+1. <code>Statistics → I/O Graphs</code><br />
+2. Shows traffic volume over time<br />
+3. Spikes = bursts of activity (commands, file transfers)<br />
+4. Regular patterns = beaconing</p>
+<hr />
+<h2 id="9-phase-7-reporting-documentation">9. PHASE 7 — REPORTING &amp; DOCUMENTATION</h2>
+<h3 id="91-report-structure">9.1 Report Structure</h3>
+<div class="codehilite"><pre><span></span><code><span class="mf">1.</span><span class="w"> </span><span class="n">EXECUTIVE</span><span class="w"> </span><span class="n">SUMMARY</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">What</span><span class="w"> </span><span class="n">happened</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="n">paragraph</span><span class="p">,</span><span class="w"> </span><span class="n">non</span><span class="o">-</span><span class="n">technical</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Impact</span><span class="w"> </span><span class="n">assessment</span><span class="w"> </span><span class="p">(</span><span class="mi">1</span><span class="w"> </span><span class="n">paragraph</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Confidence</span><span class="w"> </span><span class="n">level</span><span class="w"> </span><span class="p">(</span><span class="n">High</span><span class="o">/</span><span class="n">Medium</span><span class="o">/</span><span class="n">Low</span><span class="p">)</span>
+
+<span class="mf">2.</span><span class="w"> </span><span class="n">INCIDENT</span><span class="w"> </span><span class="n">DETAILS</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Detection</span><span class="w"> </span><span class="n">source</span><span class="w"> </span><span class="p">(</span><span class="n">how</span><span class="w"> </span><span class="n">was</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="n">detected</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">First</span><span class="w"> </span><span class="n">observed</span><span class="w"> </span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Last</span><span class="w"> </span><span class="n">observed</span><span class="w"> </span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Affected</span><span class="w"> </span><span class="n">assets</span><span class="w"> </span><span class="p">(</span><span class="n">IPs</span><span class="p">,</span><span class="w"> </span><span class="n">hostnames</span><span class="p">,</span><span class="w"> </span><span class="n">users</span><span class="p">)</span>
+
+<span class="mf">3.</span><span class="w"> </span><span class="n">TECHNICAL</span><span class="w"> </span><span class="n">ANALYSIS</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Network</span><span class="w"> </span><span class="n">overview</span><span class="w"> </span><span class="p">(</span><span class="n">topology</span><span class="p">,</span><span class="w"> </span><span class="n">protocols</span><span class="p">,</span><span class="w"> </span><span class="n">duration</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Timeline</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="p">(</span><span class="n">the</span><span class="w"> </span><span class="n">table</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">Phase</span><span class="w"> </span><span class="mi">6</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Detailed</span><span class="w"> </span><span class="n">analysis</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">each</span><span class="w"> </span><span class="n">session</span><span class="o">/</span><span class="n">conversation</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Payloads</span><span class="w"> </span><span class="n">decoded</span><span class="w"> </span><span class="p">(</span><span class="n">commands</span><span class="p">,</span><span class="w"> </span><span class="n">credentials</span><span class="p">,</span><span class="w"> </span><span class="n">files</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Anomalies</span><span class="w"> </span><span class="n">identified</span>
+
+<span class="mf">4.</span><span class="w"> </span><span class="n">INDICATORS</span><span class="w"> </span><span class="n">OF</span><span class="w"> </span><span class="n">COMPROMISE</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Table</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">all</span><span class="w"> </span><span class="n">IOCs</span><span class="w"> </span><span class="p">(</span><span class="n">IPs</span><span class="p">,</span><span class="w"> </span><span class="n">domains</span><span class="p">,</span><span class="w"> </span><span class="n">ports</span><span class="p">,</span><span class="w"> </span><span class="n">files</span><span class="p">,</span><span class="w"> </span><span class="n">hashes</span><span class="p">)</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Confidence</span><span class="w"> </span><span class="n">level</span><span class="w"> </span><span class="n">per</span><span class="w"> </span><span class="n">IOC</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">MISP</span><span class="o">/</span><span class="n">STIX</span><span class="w"> </span><span class="n">format</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">required</span>
+
+<span class="mf">5.</span><span class="w"> </span><span class="n">ATTACK</span><span class="w"> </span><span class="n">CHAIN</span><span class="w"> </span><span class="n">MAPPING</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Map</span><span class="w"> </span><span class="n">events</span><span class="w"> </span><span class="n">to</span><span class="w"> </span><span class="n">MITRE</span><span class="w"> </span><span class="n">ATT</span><span class="o">&amp;</span><span class="n">CK</span><span class="w"> </span><span class="n">tactics</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Identify</span><span class="w"> </span><span class="n">techniques</span><span class="w"> </span><span class="n">used</span>
+
+<span class="mf">6.</span><span class="w"> </span><span class="n">IMPACT</span><span class="w"> </span><span class="n">ASSESSMENT</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Data</span><span class="w"> </span><span class="n">potentially</span><span class="w"> </span><span class="n">exfiltrated</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Systems</span><span class="w"> </span><span class="n">compromised</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Business</span><span class="w"> </span><span class="n">operations</span><span class="w"> </span><span class="n">affected</span>
+
+<span class="mf">7.</span><span class="w"> </span><span class="n">RECOMMENDATIONS</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Immediate</span><span class="w"> </span><span class="n">containment</span><span class="w"> </span><span class="n">actions</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Short</span><span class="o">-</span><span class="n">term</span><span class="w"> </span><span class="n">remediation</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Long</span><span class="o">-</span><span class="n">term</span><span class="w"> </span><span class="n">improvements</span>
+
+<span class="mf">8.</span><span class="w"> </span><span class="n">EVIDENCE</span><span class="w"> </span><span class="n">APPENDIX</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Pcap</span><span class="w"> </span><span class="n">file</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="nb">hash</span><span class="p">,</span><span class="w"> </span><span class="n">size</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Chain</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">custody</span><span class="w"> </span><span class="n">form</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Screenshots</span><span class="w"> </span><span class="n">of</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="n">findings</span>
+<span class="w">   </span><span class="o">-</span><span class="w"> </span><span class="n">Full</span><span class="w"> </span><span class="n">Follow</span><span class="w"> </span><span class="n">Stream</span><span class="w"> </span><span class="n">outputs</span>
+</code></pre></div>
+
+<h3 id="92-mitre-attck-mapping">9.2 MITRE ATT&amp;CK Mapping</h3>
+<p>Map every finding to ATT&amp;CK for structured reporting:</p>
+<table>
+<thead>
+<tr>
+<th>ATTACK Finding</th>
+<th>Tactic</th>
+<th>Technique</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ARP + DNS queries</td>
+<td>Reconnaissance</td>
+<td>Active Scanning (T1595)</td>
+</tr>
+<tr>
+<td>Port 21 connection attempts</td>
+<td>Reconnaissance</td>
+<td>Scanning IP Blocks (T1595.001)</td>
+</tr>
+<tr>
+<td>Remote shell on port 53</td>
+<td>Command &amp; Control</td>
+<td>Non-Standard Port (T1571)</td>
+</tr>
+<tr>
+<td>Remote shell on port 23</td>
+<td>Execution</td>
+<td>Remote Services (T1021)</td>
+</tr>
+<tr>
+<td>Remote shell on port 80</td>
+<td>Command &amp; Control</td>
+<td>Web Protocols (T1071.001)</td>
+</tr>
+<tr>
+<td><code>dir</code> command execution</td>
+<td>Discovery</td>
+<td>File and Directory Discovery (T1083)</td>
+</tr>
+<tr>
+<td>Windows XP banner</td>
+<td>Discovery</td>
+<td>System Information Discovery (T1082)</td>
+</tr>
+<tr>
+<td>External SSL connection</td>
+<td>Command &amp; Control</td>
+<td>Encrypted Channel (T1573)</td>
+</tr>
+<tr>
+<td>HTTP GET to external IP</td>
+<td>Command &amp; Control</td>
+<td>Application Layer Protocol (T1071)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="10-the-wireshark-filter-cheat-sheet">10. THE WIRESHARK FILTER CHEAT SHEET</h2>
+<h3 id="101-essential-filters">10.1 Essential Filters</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># === PROTOCOL FILTERS ===</span>
+<span class="n">arp</span><span class="w">                        </span><span class="c1"># ARP traffic</span>
+<span class="n">dns</span><span class="w">                        </span><span class="c1"># DNS protocol</span>
+<span class="n">http</span><span class="w">                       </span><span class="c1"># HTTP protocol</span>
+<span class="n">https</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">tls</span><span class="w">               </span><span class="c1"># TLS/HTTPS</span>
+<span class="n">telnet</span><span class="w">                     </span><span class="c1"># Telnet</span>
+<span class="n">ftp</span><span class="w">                        </span><span class="c1"># FTP</span>
+<span class="n">smb</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">smb2</span><span class="w">                </span><span class="c1"># SMB file sharing</span>
+<span class="n">rdp</span><span class="w">                        </span><span class="c1"># Remote Desktop</span>
+<span class="n">ssh</span><span class="w">                        </span><span class="c1"># SSH</span>
+<span class="n">icmp</span><span class="w">                       </span><span class="c1"># Ping</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">22</span><span class="w">             </span><span class="c1"># SSH port</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">23</span><span class="w">             </span><span class="c1"># Telnet port</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">53</span><span class="w">             </span><span class="c1"># DNS port (TCP)</span>
+<span class="n">udp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">53</span><span class="w">             </span><span class="c1"># DNS port (UDP)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">80</span><span class="w">             </span><span class="c1"># HTTP port</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">443</span><span class="w">            </span><span class="c1"># HTTPS port</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">445</span><span class="w">            </span><span class="c1"># SMB port</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3389</span><span class="w">           </span><span class="c1"># RDP port</span>
+
+<span class="c1"># === IP FILTERS ===</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">192.168</span><span class="o">.</span><span class="mf">1.3</span><span class="w">                    </span><span class="c1"># Traffic to OR from this IP</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">src</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">192.168</span><span class="o">.</span><span class="mf">1.3</span><span class="w">                     </span><span class="c1"># Traffic FROM this IP</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">dst</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">192.168</span><span class="o">.</span><span class="mf">1.3</span><span class="w">                     </span><span class="c1"># Traffic TO this IP</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">192.168</span><span class="o">.</span><span class="mf">1.0</span><span class="o">/</span><span class="mi">24</span><span class="w">                 </span><span class="c1"># Traffic in this subnet</span>
+<span class="o">!</span><span class="p">(</span><span class="n">ip</span><span class="o">.</span><span class="n">addr</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">192.168</span><span class="o">.</span><span class="mf">1.0</span><span class="o">/</span><span class="mi">24</span><span class="p">)</span><span class="w">              </span><span class="c1"># Traffic OUTSIDE this subnet (external)</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">src</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">192.168</span><span class="o">.</span><span class="mf">1.3</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">ip</span><span class="o">.</span><span class="n">dst</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">192.168</span><span class="o">.</span><span class="mf">1.2</span><span class="w">  </span><span class="c1"># One direction only</span>
+
+<span class="c1"># === TCP FLAG FILTERS ===</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">syn</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">ack</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w">   </span><span class="c1"># SYN-only (connection attempt)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">syn</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">ack</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w">  </span><span class="c1"># SYN-ACK (open port response)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">reset</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w">                       </span><span class="c1"># RST (connection reset/rejected)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">push</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w">                        </span><span class="c1"># PSH (data being sent)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">fin</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w">                         </span><span class="c1"># FIN (graceful close)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mh">0x000</span><span class="w">                         </span><span class="c1"># NULL scan (no flags)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mh">0x029</span><span class="w">                         </span><span class="c1"># XMAS scan (FIN+URG+PSH)</span>
+
+<span class="c1"># === PORT SCAN DETECTION ===</span>
+<span class="c1"># SYN scan (one SYN, no ACK, to many ports):</span>
+<span class="n">ip</span><span class="o">.</span><span class="n">src</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">10.0</span><span class="o">.</span><span class="mf">0.5</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">syn</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">ack</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span>
+
+<span class="c1"># See all rejected connections:</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">reset</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">tcp</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">ack</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span>
+
+<span class="c1"># === DNS ANOMALY FILTERS ===</span>
+<span class="c1"># DNS over TCP (unusual):</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">port</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">53</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">dns</span>
+
+<span class="c1"># DNS responses with error codes:</span>
+<span class="n">dns</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">rcode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">3</span><span class="w">                       </span><span class="c1"># NXDOMAIN (domain doesn&#39;t exist)</span>
+<span class="n">dns</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">rcode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w">                      </span><span class="c1"># SERVFAIL</span>
+
+<span class="c1"># Long DNS queries (potential tunneling):</span>
+<span class="n">udp</span><span class="o">.</span><span class="n">length</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">100</span>
+
+<span class="c1"># DNS TXT records (potential data exfiltration):</span>
+<span class="n">dns</span><span class="o">.</span><span class="n">txt</span>
+
+<span class="c1"># === HTTP FILTERS ===</span>
+<span class="n">http</span><span class="o">.</span><span class="n">request</span><span class="w">                              </span><span class="c1"># All HTTP requests</span>
+<span class="n">http</span><span class="o">.</span><span class="n">response</span><span class="w">                             </span><span class="c1"># All HTTP responses</span>
+<span class="n">http</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;GET&quot;</span><span class="w">              </span><span class="c1"># GET requests</span>
+<span class="n">http</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">method</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="s2">&quot;POST&quot;</span><span class="w">             </span><span class="c1"># POST requests (data upload)</span>
+<span class="n">http</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">code</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">200</span><span class="w">                 </span><span class="c1"># Successful responses</span>
+<span class="n">http</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">code</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">302</span><span class="w">                 </span><span class="c1"># Redirects</span>
+<span class="n">http</span><span class="o">.</span><span class="n">response</span><span class="o">.</span><span class="n">code</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mi">400</span><span class="w">                 </span><span class="c1"># Errors (403, 404, 500, etc.)</span>
+<span class="n">http</span><span class="o">.</span><span class="n">user_agent</span><span class="w">                           </span><span class="c1"># Filter by user agent</span>
+<span class="n">http</span><span class="o">.</span><span class="n">host</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="s2">&quot;evil&quot;</span><span class="w">                 </span><span class="c1"># Specific host</span>
+<span class="n">http</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">uri</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="s2">&quot;login&quot;</span><span class="w">         </span><span class="c1"># Specific URI</span>
+<span class="n">http</span><span class="o">.</span><span class="n">authorization</span><span class="w">                        </span><span class="c1"># HTTP auth headers</span>
+<span class="n">http</span><span class="o">.</span><span class="n">cookie</span><span class="w">                               </span><span class="c1"># Cookies</span>
+<span class="n">http</span><span class="o">.</span><span class="n">set_cookie</span><span class="w">                           </span><span class="c1"># Set-Cookie headers</span>
+
+<span class="c1"># === TLS/SSL FILTERS ===</span>
+<span class="n">tls</span><span class="o">.</span><span class="n">handshake</span><span class="o">.</span><span class="n">type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w">                   </span><span class="c1"># Client Hello</span>
+<span class="n">tls</span><span class="o">.</span><span class="n">handshake</span><span class="o">.</span><span class="n">type</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w">                   </span><span class="c1"># Server Hello</span>
+<span class="n">tls</span><span class="o">.</span><span class="n">handshake</span><span class="o">.</span><span class="n">extensions_server_name</span><span class="w">      </span><span class="c1"># SNI (server name)</span>
+<span class="n">tls</span><span class="o">.</span><span class="n">handshake</span><span class="o">.</span><span class="n">certificate</span><span class="w">                 </span><span class="c1"># Certificate</span>
+<span class="n">tls</span><span class="o">.</span><span class="n">record</span><span class="o">.</span><span class="n">version</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mh">0x0303</span><span class="w">              </span><span class="c1"># TLS 1.2</span>
+
+<span class="c1"># === SEARCH FILTERS ===</span>
+<span class="c1"># Search packet content for string (case-sensitive):</span>
+<span class="n">frame</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="s2">&quot;password&quot;</span>
+<span class="n">frame</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="s2">&quot;admin&quot;</span>
+<span class="n">frame</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="s2">&quot;evil.com&quot;</span>
+
+<span class="c1"># Case-insensitive search:</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">payload</span><span class="w"> </span><span class="n">contains</span><span class="w"> </span><span class="s2">&quot;User-Agent:&quot;</span>
+
+<span class="c1"># === UTILITY FILTERS ===</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">stream</span><span class="w"> </span><span class="n">eq</span><span class="w"> </span><span class="mi">0</span><span class="w">                           </span><span class="c1"># Specific TCP stream</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">analysis</span><span class="o">.</span><span class="n">retransmission</span><span class="w">               </span><span class="c1"># Retransmissions ( congestion or tampering)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">analysis</span><span class="o">.</span><span class="n">duplicate_ack</span><span class="w">                </span><span class="c1"># Duplicate ACKs</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">analysis</span><span class="o">.</span><span class="n">zero_window</span><span class="w">                  </span><span class="c1"># Zero window (flow control)</span>
+<span class="n">tcp</span><span class="o">.</span><span class="n">analysis</span><span class="o">.</span><span class="n">ack_rtt</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="w">                  </span><span class="c1"># High RTT (latency)</span>
+</code></pre></div>
+
+<h3 id="102-filter-logic">10.2 Filter Logic</h3>
+<div class="codehilite"><pre><span></span><code><span class="o">&amp;&amp;</span><span class="w">    </span><span class="n">AND</span><span class="w">    </span><span class="p">(</span><span class="n">both</span><span class="w"> </span><span class="n">conditions</span><span class="w"> </span><span class="n">must</span><span class="w"> </span><span class="n">match</span><span class="p">)</span>
+<span class="o">||</span><span class="w">    </span><span class="n">OR</span><span class="w">     </span><span class="p">(</span><span class="n">either</span><span class="w"> </span><span class="n">condition</span><span class="w"> </span><span class="n">matches</span><span class="p">)</span>
+<span class="o">!</span><span class="p">()</span><span class="w">   </span><span class="n">NOT</span><span class="w">    </span><span class="p">(</span><span class="n">negate</span><span class="w"> </span><span class="n">condition</span><span class="p">)</span>
+<span class="n">contains</span><span class="w">    </span><span class="p">(</span><span class="n">substring</span><span class="w"> </span><span class="n">match</span><span class="p">)</span>
+<span class="n">matches</span><span class="w">     </span><span class="p">(</span><span class="n">regex</span><span class="w"> </span><span class="n">match</span><span class="p">)</span>
+<span class="n">eq</span><span class="w">    </span><span class="o">==</span><span class="w">    </span><span class="p">(</span><span class="n">equals</span><span class="p">)</span>
+<span class="n">ne</span><span class="w">    </span><span class="o">!=</span><span class="w">    </span><span class="p">(</span><span class="k">not</span><span class="w"> </span><span class="n">equals</span><span class="p">)</span>
+<span class="n">gt</span><span class="w">    </span><span class="o">&gt;</span><span class="w">     </span><span class="p">(</span><span class="n">greater</span><span class="w"> </span><span class="n">than</span><span class="p">)</span>
+<span class="n">lt</span><span class="w">    </span><span class="o">&lt;</span><span class="w">     </span><span class="p">(</span><span class="n">less</span><span class="w"> </span><span class="n">than</span><span class="p">)</span>
+<span class="n">ge</span><span class="w">    </span><span class="o">&gt;=</span><span class="w">    </span><span class="p">(</span><span class="n">greater</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">equal</span><span class="p">)</span>
+<span class="n">le</span><span class="w">    </span><span class="o">&lt;=</span><span class="w">    </span><span class="p">(</span><span class="n">less</span><span class="w"> </span><span class="k">or</span><span class="w"> </span><span class="n">equal</span><span class="p">)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="11-tshark-quick-reference">11. tshark QUICK REFERENCE</h2>
+<h3 id="111-capture-commands">11.1 Capture Commands</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Basic capture:</span>
+tshark<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>capture.pcap
+
+<span class="c1"># Capture with filter:</span>
+tshark<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;port 80 or port 443&quot;</span><span class="w"> </span>-w<span class="w"> </span>web.pcap
+
+<span class="c1"># Capture specific host:</span>
+tshark<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;host 192.168.1.42&quot;</span><span class="w"> </span>-w<span class="w"> </span>suspect.pcap
+
+<span class="c1"># Rotating capture (100MB files, 50 files max):</span>
+tshark<span class="w"> </span>-i<span class="w"> </span>eth0<span class="w"> </span>-w<span class="w"> </span>cap-%Y%m%d-%H%M.pcap<span class="w"> </span>-b<span class="w"> </span>filesize:100000<span class="w"> </span>-b<span class="w"> </span>files:50
+</code></pre></div>
+
+<h3 id="112-analysis-commands">11.2 Analysis Commands</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Read a pcap:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap
+
+<span class="c1"># Read with filter:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.request&quot;</span>
+
+<span class="c1"># Read specific fields:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>frame.number<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ip.dst<span class="w"> </span>-e<span class="w"> </span>_ws.col.Protocol<span class="w"> </span>-e<span class="w"> </span>_ws.col.Info
+
+<span class="c1"># Statistics:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>io,stat,0<span class="w">                    </span><span class="c1"># I/O stats</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>conv,tcp<span class="w">                      </span><span class="c1"># TCP conversations</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>conv,udp<span class="w">                       </span><span class="c1"># UDP conversations</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>endpoints,ip<span class="w">                   </span><span class="c1"># IP endpoints</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>protocol,fields<span class="w">                </span><span class="c1"># Protocol hierarchy</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>http,tree<span class="w">                      </span><span class="c1"># HTTP stats</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>dns,tree<span class="w">                       </span><span class="c1"># DNS stats</span>
+
+<span class="c1"># Follow TCP stream (stream 0):</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-q<span class="w"> </span>-z<span class="w"> </span>follow,tcp,ascii,0
+
+<span class="c1"># Export objects:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>--export-objects<span class="w"> </span>http,/tmp/http-objects/
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>--export-objects<span class="w"> </span>smb,/tmp/smb-objects/
+</code></pre></div>
+
+<h3 id="113-automation-patterns">11.3 Automation Patterns</h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Extract all unique IPs:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>ip.dst<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>tr<span class="w"> </span><span class="s1">&#39;\t&#39;</span><span class="w"> </span><span class="s1">&#39;\n&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span>&gt;<span class="w"> </span>all_ips.txt
+
+<span class="c1"># Extract all DNS queries:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;dns.flags.response == 0&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>dns.qry.name<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span>&gt;<span class="w"> </span>domains.txt
+
+<span class="c1"># Extract all HTTP URLs:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.request&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>http.host<span class="w"> </span>-e<span class="w"> </span>http.request.uri<span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span><span class="s1">&#39;s/\t//&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span>&gt;<span class="w"> </span>urls.txt
+
+<span class="c1"># Extract all User-Agents:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;http.user_agent&quot;</span><span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>http.user_agent<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-u<span class="w"> </span>&gt;<span class="w"> </span>useragents.txt
+
+<span class="c1"># Count packets per protocol:</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>_ws.col.Protocol<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn<span class="w"> </span>&gt;<span class="w"> </span>protocol_counts.txt
+
+<span class="c1"># Find all SYN scans (SYN without ACK):</span>
+tshark<span class="w"> </span>-r<span class="w"> </span>capture.pcap<span class="w"> </span>-Y<span class="w"> </span><span class="s2">&quot;tcp.flags.syn == 1 &amp;&amp; tcp.flags.ack == 0&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-T<span class="w"> </span>fields<span class="w"> </span>-e<span class="w"> </span>ip.src<span class="w"> </span>-e<span class="w"> </span>tcp.dstport<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>&gt;<span class="w"> </span>syn_scans.txt
+</code></pre></div>
+
+<hr />
+<h2 id="12-attack-pattern-recognition-guide">12. ATTACK PATTERN RECOGNITION GUIDE</h2>
+<h3 id="121-quick-pattern-attack-matrix">12.1 Quick Pattern → Attack Matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Likely Attack</th>
+<th>Filter</th>
+<th>Investigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Many SYN, no data, many ports</td>
+<td>Port scan</td>
+<td><code>tcp.flags.syn == 1 &amp;&amp; tcp.flags.ack == 0</code></td>
+<td>Source IP = scanner, target ports = services</td>
+</tr>
+<tr>
+<td>SYN + RST on a port</td>
+<td>Service closed</td>
+<td><code>tcp.flags.reset == 1</code></td>
+<td>Port not available, attacker may try others</td>
+</tr>
+<tr>
+<td>SYN + SYN-ACK + data</td>
+<td>Service open</td>
+<td><code>tcp.flags.syn == 1 &amp;&amp; tcp.flags.ack == 1</code></td>
+<td>Service responded, examine data</td>
+</tr>
+<tr>
+<td>TCP 53 with non-DNS payload</td>
+<td>Covert shell/tunnel</td>
+<td><code>tcp.port == 53 &amp;&amp; !dns</code></td>
+<td>Follow stream — may be shell</td>
+</tr>
+<tr>
+<td>Regular small HTTP requests</td>
+<td>C2 Beaconing</td>
+<td><code>http.request</code> + timing analysis</td>
+<td>Calculate interval, identify C2 IP</td>
+</tr>
+<tr>
+<td>Large HTTP POST to external</td>
+<td>Data exfiltration</td>
+<td><code>http.request.method == POST</code></td>
+<td>Extract POST body, identify data</td>
+</tr>
+<tr>
+<td>High-entropy DNS queries</td>
+<td>DNS tunneling</td>
+<td><code>udp.port == 53</code> + inspect query names</td>
+<td>Decode query names, extract exfiltrated data</td>
+</tr>
+<tr>
+<td>Telnet session</td>
+<td>Remote access</td>
+<td><code>telnet</code></td>
+<td>Follow stream — extract commands &amp; credentials</td>
+</tr>
+<tr>
+<td>SMB between workstations</td>
+<td>Lateral movement</td>
+<td><code>smb2 &amp;&amp; ip.src == &lt;subnet&gt; &amp;&amp; ip.dst == &lt;subnet&gt;</code></td>
+<td>Check file names, admin shares</td>
+</tr>
+<tr>
+<td>RDP between internal hosts</td>
+<td>Lateral movement</td>
+<td><code>tcp.port == 3389 &amp;&amp; ip.src != &lt;gateway&gt;</code></td>
+<td>Unusual RDP sources</td>
+</tr>
+<tr>
+<td>Many NXDOMAIN responses</td>
+<td>DGA malware</td>
+<td><code>dns.flags.rcode == 3</code></td>
+<td>Source host likely infected with DGA malware</td>
+</tr>
+<tr>
+<td>TLS to unknown domains</td>
+<td>C2 over TLS</td>
+<td><code>tls.handshake.extensions_server_name</code></td>
+<td>Cross-reference domains with threat intel</td>
+</tr>
+<tr>
+<td>ARP broadcast storm</td>
+<td>ARP poisoning</td>
+<td><code>arp.opcode == 1</code> with many requests</td>
+<td>Check for MAC spoofing, MITM</td>
+</tr>
+<tr>
+<td>ICMP with large payload</td>
+<td>Data exfiltration via ICMP</td>
+<td><code>icmp &amp;&amp; data.len &gt; 64</code></td>
+<td>Extract data from ICMP payload</td>
+</tr>
+<tr>
+<td>FTP credentials in cleartext</td>
+<td>FTP credential theft</td>
+<td><code>ftp.request.command == USER \|\| ftp.request.command == PASS</code></td>
+<td>Extract credentials, check for unauthorized access</td>
+</tr>
+</tbody>
+</table>
+<h3 id="122-common-backdoor-ports">12.2 Common Backdoor Ports</h3>
+<table>
+<thead>
+<tr>
+<th>Port</th>
+<th>Protocol</th>
+<th>Threat Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>53</td>
+<td>TCP</td>
+<td>DNS tunneling, covert shell</td>
+</tr>
+<tr>
+<td>80</td>
+<td>TCP</td>
+<td>HTTP C2, web shell</td>
+</tr>
+<tr>
+<td>443</td>
+<td>TCP</td>
+<td>Encrypted C2</td>
+</tr>
+<tr>
+<td>23</td>
+<td>TCP</td>
+<td>Telnet backdoor</td>
+</tr>
+<tr>
+<td>4444</td>
+<td>TCP</td>
+<td>Metasploit default payload (reverse shell)</td>
+</tr>
+<tr>
+<td>31337</td>
+<td>TCP</td>
+<td>Back Orifice backdoor</td>
+</tr>
+<tr>
+<td>1234</td>
+<td>TCP</td>
+<td>Many backdoor Trojans</td>
+</tr>
+<tr>
+<td>6667</td>
+<td>TCP</td>
+<td>IRC botnet C2</td>
+</tr>
+<tr>
+<td>8080</td>
+<td>TCP</td>
+<td>Alternative HTTP C2</td>
+</tr>
+<tr>
+<td>8443</td>
+<td>TCP</td>
+<td>Alternative HTTPS C2</td>
+</tr>
+<tr>
+<td>9999</td>
+<td>TCP</td>
+<td>Various backdoors</td>
+</tr>
+</tbody>
+</table>
+<h3 id="123-malware-behavior-signatures-in-traffic">12.3 Malware Behavior Signatures in Traffic</h3>
+<table>
+<thead>
+<tr>
+<th>Behavior</th>
+<th>What You See</th>
+<th>Malware Family Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DNS beaconing to same domain</td>
+<td>Regular DNS queries to one domain</td>
+<td>Various DGA families</td>
+</tr>
+<tr>
+<td>HTTP GET to /gate.php</td>
+<td>C2 check-in panel</td>
+<td>Pony, Formgrass, Zeus</td>
+</tr>
+<tr>
+<td>POST with encoded data</td>
+<td>Data exfiltration</td>
+<td>Various info-stealers</td>
+</tr>
+<tr>
+<td>TLS to raw IP (no SNI)</td>
+<td>C2 avoiding domain IOCs</td>
+<td>Cobalt Strike, custom implants</td>
+</tr>
+<tr>
+<td>SMB file copy to ADMIN$</td>
+<td>Lateral movement</td>
+<td>Emotet, WannaCry, NotPetya</td>
+</tr>
+<tr>
+<td>RDP from unexpected source</td>
+<td>Lateral movement</td>
+<td>Many targeted attacks</td>
+</tr>
+<tr>
+<td>DCE/RPC bind requests</td>
+<td>Remote execution</td>
+<td>PsExec, WMI-based lateral movement</td>
+</tr>
+<tr>
+<td>Kerberos AS-REQ bursts</td>
+<td>Kerberoasting</td>
+<td>Adversary tools</td>
+</tr>
+<tr>
+<td>TLS with self-signed certs</td>
+<td>C2 infrastructure</td>
+<td>Many APT toolsets</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="13-legal-chain-of-custody">13. LEGAL &amp; CHAIN OF CUSTODY</h2>
+<h3 id="131-chain-of-custody-form-template">13.1 Chain of Custody Form Template</h3>
+<div class="codehilite"><pre><span></span><code><span class="err">═══════════════════════════════════════════════════════════════</span>
+<span class="n">EVIDENCE</span><span class="w"> </span><span class="n">CHAIN</span><span class="w"> </span><span class="n">OF</span><span class="w"> </span><span class="n">CUSTODY</span>
+<span class="err">═══════════════════════════════════════════════════════════════</span>
+
+<span class="n">Case</span><span class="w"> </span><span class="n">ID</span><span class="o">:</span><span class="w">           </span><span class="n">INC</span><span class="mi">-2024</span><span class="mo">-001</span>
+<span class="n">Evidence</span><span class="w"> </span><span class="n">ID</span><span class="o">:</span><span class="w">       </span><span class="n">EVD</span><span class="mo">-001</span>
+<span class="nl">Description</span><span class="p">:</span><span class="w">       </span><span class="n">Network</span><span class="w"> </span><span class="n">capture</span><span class="w"> </span><span class="p">(</span><span class="n">pcap</span><span class="p">)</span><span class="w"> </span><span class="n">from</span><span class="w"> </span><span class="n">core</span><span class="w"> </span><span class="k">switch</span><span class="w"> </span><span class="n">SPAN</span>
+<span class="nl">Source</span><span class="p">:</span><span class="w">            </span><span class="n">Core</span><span class="w"> </span><span class="n">Switch</span><span class="w"> </span><span class="n">port</span><span class="w"> </span><span class="mi">24</span><span class="w"> </span><span class="n">mirror</span><span class="w"> </span><span class="err">→</span><span class="w"> </span><span class="n">sensor</span><span class="w"> </span><span class="n">eth0</span>
+<span class="n">Collected</span><span class="w"> </span><span class="n">by</span><span class="o">:</span><span class="w">      </span><span class="p">[</span><span class="n">Name</span><span class="p">],</span><span class="w"> </span><span class="p">[</span><span class="n">Role</span><span class="p">]</span>
+<span class="n">Date</span><span class="o">/</span><span class="n">Time</span><span class="w"> </span><span class="p">(</span><span class="n">UTC</span><span class="p">)</span><span class="o">:</span><span class="w">   </span><span class="mi">2024</span><span class="o">-</span><span class="n">XX</span><span class="o">-</span><span class="n">XX</span><span class="w"> </span><span class="n">HH</span><span class="o">:</span><span class="n">MM</span><span class="o">:</span><span class="n">SS</span><span class="w"> </span><span class="n">UTC</span>
+<span class="n">Storage</span><span class="w"> </span><span class="n">Location</span><span class="o">:</span><span class="w">  </span><span class="o">/</span><span class="n">cases</span><span class="o">/</span><span class="n">INC</span><span class="mi">-2024</span><span class="mo">-001</span><span class="o">/</span><span class="n">original</span><span class="o">/</span>
+<span class="n">File</span><span class="w"> </span><span class="n">Name</span><span class="o">:</span><span class="w">         </span><span class="n">incident</span><span class="mf">-001.</span><span class="n">pcap</span>
+<span class="n">File</span><span class="w"> </span><span class="n">Size</span><span class="o">:</span><span class="w">         </span><span class="n">XX</span><span class="p">,</span><span class="n">XXX</span><span class="w"> </span><span class="n">bytes</span>
+<span class="n">SHA</span><span class="mi">-256</span><span class="o">:</span><span class="w">           </span><span class="p">[</span><span class="n">hash</span><span class="w"> </span><span class="n">value</span><span class="p">]</span>
+<span class="nl">MD5</span><span class="p">:</span><span class="w">               </span><span class="p">[</span><span class="n">hash</span><span class="w"> </span><span class="n">value</span><span class="p">]</span>
+
+<span class="err">───</span><span class="w"> </span><span class="n">CUSTODY</span><span class="w"> </span><span class="n">TRANSFER</span><span class="w"> </span><span class="n">LOG</span><span class="w"> </span><span class="err">───</span>
+
+<span class="n">Date</span><span class="o">/</span><span class="n">Time</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">From</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">To</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Reason</span>
+<span class="o">----------|------|----|--------</span>
+<span class="w">          </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">    </span><span class="o">|</span>
+<span class="w">          </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">    </span><span class="o">|</span>
+<span class="w">          </span><span class="o">|</span><span class="w">      </span><span class="o">|</span><span class="w">    </span><span class="o">|</span>
+
+<span class="err">───</span><span class="w"> </span><span class="n">ANALYSIS</span><span class="w"> </span><span class="n">LOG</span><span class="w"> </span><span class="err">───</span>
+
+<span class="n">Date</span><span class="o">/</span><span class="n">Time</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Analyst</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Action</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">Result</span>
+<span class="o">----------|---------|--------|-------</span>
+<span class="w">          </span><span class="o">|</span><span class="w">         </span><span class="o">|</span><span class="w">        </span><span class="o">|</span>
+<span class="w">          </span><span class="o">|</span><span class="w">         </span><span class="o">|</span><span class="w">        </span><span class="o">|</span>
+<span class="w">          </span><span class="o">|</span><span class="w">         </span><span class="o">|</span><span class="w">        </span><span class="o">|</span>
+
+<span class="err">═══════════════════════════════════════════════════════════════</span>
+</code></pre></div>
+
+<h3 id="132-rules-of-evidence">13.2 Rules of Evidence</h3>
+<ol>
+<li><strong>Never modify the original</strong> — always work on a copy</li>
+<li><strong>Hash immediately</strong> — SHA-256 at minimum, MD5 as secondary</li>
+<li><strong>Document every action</strong> — what tool, what command, what result</li>
+<li><strong>Timestamp everything</strong> — use UTC to avoid timezone confusion</li>
+<li><strong>Store securely</strong> — encrypted, access-controlled, thermally stable</li>
+<li><strong>Transport with log</strong> — every handoff is logged with date/time/person</li>
+<li><strong>Verify before analysis</strong> — re-hash the copy before starting work</li>
+<li><strong>Output integrity</strong> — hash your analysis output too</li>
+</ol>
+<h3 id="133-legal-considerations">13.3 Legal Considerations</h3>
+<table>
+<thead>
+<tr>
+<th>Consideration</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Privacy laws (GDPR, CCPA)</td>
+<td>pcap may contain PII — handle per policy</td>
+</tr>
+<tr>
+<td>Authorization</td>
+<td>Ensure you have written authorization to capture</td>
+</tr>
+<tr>
+<td>Wiretap laws</td>
+<td>Some jurisdictions require consent for capture</td>
+</tr>
+<tr>
+<td>Internal policy</td>
+<td>Follow your organization's IR handling policy</td>
+</tr>
+<tr>
+<td>Law enforcement</td>
+<td>If criminal case, evidence must meet evidentiary standards</td>
+</tr>
+<tr>
+<td>Retention</td>
+<td>Follow legal retention requirements for evidence</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="14-appendix-a-practical-exercises">14. APPENDIX A — PRACTICAL EXERCISES</h2>
+<h3 id="exercise-1-analysis-of-dns-remoteshellpcap-this-lab">Exercise 1: Analysis of dns-remoteshell.pcap (This Lab)</h3>
+<p><strong>Objective:</strong> Identify a remote shell over multiple ports including DNS port 53.</p>
+<p><strong>Steps:</strong><br />
+1. Open <code>dns-remoteshell.pcap</code> in Wireshark<br />
+2. Run Protocol Hierarchy — note Telnet and TCP<br />
+3. Check Conversations — find connections to ports 53, 23, 80, 21<br />
+4. Follow the TCP stream for port 53 — confirm it's a shell, not DNS<br />
+5. Follow the TCP stream for port 23 — extract the banner and commands<br />
+6. Filter for SYN-only packets from 192.168.1.3 — identify the port scan on port 21<br />
+7. Identify the external IPs and their activity<br />
+8. Build a timeline of all events<br />
+9. Extract all IOCs into a table<br />
+10. Write a one-page summary report</p>
+<p><strong>Expected Findings:</strong><br />
+- 3 remote shell sessions on ports 53, 23, 80<br />
+- Port scan on 21 (all RST)<br />
+- Windows XP victim<br />
+- Attacker at 192.168.1.3<br />
+- External communications to 83.170.75.178 and 205.227.136.203<br />
+- Commands: dir, ls -la, exit</p>
+<h3 id="exercise-2-dns-tunneling-detection-challenge">Exercise 2: DNS Tunneling Detection Challenge</h3>
+<p><strong>Objective:</strong> Detect DNS tunneling by analyzing query patterns.</p>
+<p><strong>Steps:</strong><br />
+1. Download a DNS tunneling pcap (e.g., from Malware Traffic CTF)<br />
+2. Open in Wireshark<br />
+3. Filter <code>dns</code> — look at query names<br />
+4. Identify high-entropy query names (random characters)<br />
+5. Calculate queries per second — abnormal volume<br />
+6. Extract all query names — decode base32 encoding<br />
+7. Reconstruct the exfiltrated data<br />
+8. Document the C2 domain and extraction technique</p>
+<h3 id="exercise-3-beaconing-pattern-detection">Exercise 3: Beaconing Pattern Detection</h3>
+<p><strong>Objective:</strong> Identify C2 beaconing in network traffic.</p>
+<p><strong>Steps:</strong><br />
+1. Use a pcap containing beaconing (e.g., Cobalt Strike beacon traffic)<br />
+2. Open in Wireshark<br />
+3. Filter for outbound HTTP/HTTPS to external IPs<br />
+4. Sort by time — observe regular intervals<br />
+5. Use Statistics → I/O Graph — visualize the periodic pattern<br />
+6. Calculate the beacon interval (e.g., 30s, 60s)<br />
+7. Extract the C2 domain/IP<br />
+8. Map to MITRE ATT&amp;CK: Command and Control → Beaconing</p>
+<hr />
+<h2 id="15-appendix-b-tool-arsenal">15. APPENDIX B — TOOL ARSENAL</h2>
+<h3 id="151-wireshark-vs-tshark-decision-guide">15.1 Wireshark vs tshark Decision Guide</h3>
+<table>
+<thead>
+<tr>
+<th>Use Case</th>
+<th>Tool</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Interactive exploration</td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>Following TCP streams</td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>Protocol hierarchy overview</td>
+<td>Wireshark (GUI is faster)</td>
+</tr>
+<tr>
+<td>Exporting objects (HTTP, SMB)</td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>Flow graph visualization</td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>I/O Graph visualization</td>
+<td>Wireshark</td>
+</tr>
+<tr>
+<td>Automation / scripting</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>Bulk IOC extraction</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>Processing multiple pcaps</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>CI/CD pipeline integration</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>Remote/headless analysis</td>
+<td>tshark</td>
+</tr>
+<tr>
+<td>Quick field extraction</td>
+<td>tshark (<code>-T fields</code>)</td>
+</tr>
+<tr>
+<td>Custom display filters</td>
+<td>Both (same syntax)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="152-complementary-tools">15.2 Complementary Tools</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Purpose</th>
+<th>When to Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>NetworkMiner</strong></td>
+<td>Auto-extract files, images, credentials</td>
+<td>Quick triage of many pcaps</td>
+</tr>
+<tr>
+<td><strong>zeek (Bro)</strong></td>
+<td>Protocol-level logging at scale</td>
+<td>Enterprise network monitoring</td>
+</tr>
+<tr>
+<td><strong>Suricata/Snort</strong></td>
+<td>IDS/IPS signature matching</td>
+<td>Real-time alerting on known threats</td>
+</tr>
+<tr>
+<td><strong>binwalk</strong></td>
+<td>Firmware/embedded file analysis</td>
+<td>Extract files from payloads</td>
+</tr>
+<tr>
+<td><strong>foremost</strong></td>
+<td>File carving from pcaps</td>
+<td>Recover deleted/hidden files</td>
+</tr>
+<tr>
+<td><strong>volatility</strong></td>
+<td>Memory forensics correlation</td>
+<td>Cross-reference RAM artifacts with network</td>
+</tr>
+<tr>
+<td><strong>CyberChef</strong></td>
+<td>Decode/encode (base64, hex, XOR)</td>
+<td>Decoding payloads and data</td>
+</tr>
+<tr>
+<td><strong>MITRE ATT&amp;CK Navigator</strong></td>
+<td>Visualize attack mapping</td>
+<td>Reporting and presentation</td>
+</tr>
+<tr>
+<td><strong>VirusTotal</strong></td>
+<td>Check file hashes, IPs, domains</td>
+<td>Threat intelligence enrichment</td>
+</tr>
+<tr>
+<td><strong>AbuseIPDB</strong></td>
+<td>Check IP reputation</td>
+<td>External IP assessment</td>
+</tr>
+<tr>
+<td><strong>urlscan.io</strong></td>
+<td>Scan suspicious URLs</td>
+<td>Analyze web infrastructure</td>
+</tr>
+<tr>
+<td><strong>Security Onion</strong></td>
+<td>All-in-one NSM platform</td>
+<td>Enterprise-scale detection &amp; response</td>
+</tr>
+<tr>
+<td><strong>Arkime</strong></td>
+<td>Full packet capture + indexing</td>
+<td>Large-scale pcap search and analysis</td>
+</tr>
+<tr>
+<td><strong>RITA</strong></td>
+<td>Beaconing detection</td>
+<td>Analyze Zeek logs for C2 patterns</td>
+</tr>
+<tr>
+<td><strong>stenographer</strong></td>
+<td>Full packet capture storage</td>
+<td>Large volume pcap storage and retrieval</td>
+</tr>
+</tbody>
+</table>
+<h3 id="153-recommended-learning-path">15.3 Recommended Learning Path</h3>
+<div class="codehilite"><pre><span></span><code><span class="n">Beginner</span><span class="p">:</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Wireshark</span><span class="w"> </span><span class="n">basics</span><span class="w"> </span><span class="p">(</span><span class="n">filters</span><span class="p">,</span><span class="w"> </span><span class="n">following</span><span class="w"> </span><span class="n">streams</span><span class="p">)</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Understanding</span><span class="w"> </span><span class="n">TCP</span><span class="o">/</span><span class="n">IP</span><span class="p">,</span><span class="w"> </span><span class="n">DNS</span><span class="p">,</span><span class="w"> </span><span class="n">HTTP</span><span class="p">,</span><span class="w"> </span><span class="n">TLS</span>
+<span class="w">  </span><span class="err">└──</span><span class="w"> </span><span class="n">Analyze</span><span class="w"> </span><span class="n">simple</span><span class="w"> </span><span class="n">pcaps</span><span class="w"> </span><span class="p">(</span><span class="n">malware</span><span class="w"> </span><span class="n">samples</span><span class="p">)</span>
+
+<span class="n">Intermediate</span><span class="p">:</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">tshark</span><span class="w"> </span><span class="n">automation</span><span class="w"> </span><span class="ow">and</span><span class="w"> </span><span class="n">scripting</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Protocol</span><span class="w"> </span><span class="n">anomaly</span><span class="w"> </span><span class="n">detection</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">DNS</span><span class="w"> </span><span class="n">tunneling</span><span class="w"> </span><span class="n">analysis</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Beaconing</span><span class="w"> </span><span class="n">detection</span>
+<span class="w">  </span><span class="err">└──</span><span class="w"> </span><span class="n">Attack</span><span class="w"> </span><span class="n">pattern</span><span class="w"> </span><span class="n">recognition</span><span class="w"> </span><span class="p">(</span><span class="n">MITRE</span><span class="w"> </span><span class="n">ATT</span><span class="o">&amp;</span><span class="n">CK</span><span class="p">)</span>
+
+<span class="n">Advanced</span><span class="p">:</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Zeek</span><span class="w"> </span><span class="nb">log</span><span class="w"> </span><span class="n">analysis</span><span class="w"> </span><span class="n">at</span><span class="w"> </span><span class="n">scale</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Suricata</span><span class="w"> </span><span class="n">rule</span><span class="w"> </span><span class="n">writing</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Memory</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">network</span><span class="w"> </span><span class="n">correlation</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Timeline</span><span class="w"> </span><span class="n">reconstruction</span><span class="w"> </span><span class="n">across</span><span class="w"> </span><span class="n">multiple</span><span class="w"> </span><span class="n">sources</span>
+<span class="w">  </span><span class="err">├──</span><span class="w"> </span><span class="n">Full</span><span class="o">-</span><span class="n">scale</span><span class="w"> </span><span class="n">enterprise</span><span class="w"> </span><span class="n">incident</span><span class="w"> </span><span class="n">response</span>
+<span class="w">  </span><span class="err">└──</span><span class="w"> </span><span class="n">Threat</span><span class="w"> </span><span class="n">hunting</span><span class="w"> </span><span class="n">with</span><span class="w"> </span><span class="n">network</span><span class="w"> </span><span class="n">telemetry</span>
+</code></pre></div>
+
+<h3 id="154-practice-resources">15.4 Practice Resources</h3>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>URL</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Malware Traffic CTF</td>
+<td>malware-traffic-analysis.net</td>
+<td>Real-world malware pcaps</td>
+</tr>
+<tr>
+<td>PCAP Challenges</td>
+<td>pcap1844.blogspot.com</td>
+<td>Practice captures</td>
+</tr>
+<tr>
+<td>Netresec Samples</td>
+<td>netresec.com/?page=PCAPfiles</td>
+<td>Sorted by malware type</td>
+</tr>
+<tr>
+<td>Wireshark Sample Captures</td>
+<td>wiki.wireshark.org/Downloads</td>
+<td>All types</td>
+</tr>
+<tr>
+<td>Stratosphere IPS</td>
+<td>stratosphereips.org</td>
+<td>MalMalware datasets</td>
+</tr>
+<tr>
+<td>CIC IDS 2017</td>
+<td>unb.ca/cic/datasets/ids.html</td>
+<td>Labeled intrusion detection dataset</td>
+</tr>
+<tr>
+<td>Zeek Sample Logs</td>
+<td>github.com/corelight</td>
+<td>Zeek log examples</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="final-checklist-before-you-submit-your-analysis">FINAL CHECKLIST: BEFORE YOU SUBMIT YOUR ANALYSIS</h2>
+<ul>
+<li>[ ] <strong>Verified file integrity</strong> — Hash of working copy matches original</li>
+<li>[ ] <strong>Protocols identified</strong> — Protocol hierarchy reviewed</li>
+<li>[ ] <strong>All conversations mapped</strong> — Conversation table reviewed</li>
+<li>[ ] <strong>All external IPs identified</strong> — Cross-referenced with threat intel</li>
+<li>[ ] <strong>All DNS queries extracted</strong> — Checked for tunneling/DGA</li>
+<li>[ ] <strong>All HTTP requests reviewed</strong> — Checked for C2, exfiltration</li>
+<li>[ ] <strong>All shell sessions followed</strong> — Commands extracted</li>
+<li>[ ] <strong>Credentials captured</strong> — If present, documented</li>
+<li>[ ] <strong>Files extracted</strong> — Exported and hashed</li>
+<li>[ ] <strong>Timeline built</strong> — Events ordered, attack chain mapped</li>
+<li>[ ] <strong>IOCs documented</strong> — Full table with context</li>
+<li>[ ] <strong>MITRE ATT&amp;CK mapped</strong> — Tactics and techniques identified</li>
+<li>[ ] <strong>Report written</strong> — Executive summary + technical details</li>
+<li>[ ] <strong>Chain of custody complete</strong> — Every action logged</li>
+<li>[ ] <strong>Evidence secured</strong> — Original in secure storage, working copy encrypted</li>
+</ul>
+<hr />
+<p><em>This playbook is a living document. Update it with new techniques, tools, and lessons learned from each engagement.</em></p>
+<p><em>End of Playbook — Version 1.0</em></p>
+</body>
+</html>
